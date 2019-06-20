@@ -1,5 +1,5 @@
-# from room import RoomStatus
-# from game import GamePhase
+from room import RoomStatus
+from game import GamePhase
 from enum import Enum
 
 class ActionGroup(Enum):

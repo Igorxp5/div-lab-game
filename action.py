@@ -1,5 +1,6 @@
 from room import RoomStatus
 from game import GamePhase
+
 from enum import Enum
 
 class ActionGroup(Enum):
@@ -21,6 +22,8 @@ class ActionParam(Enum):
 	def __str__(self):
 		return self.value
 
+def a(network, socketId, rooms, game, params):
+	
 
 class ActionCondiction(Enum):
 	ROOM_STATUS_IN_GAME = lambda network, socketId, rooms, game, params: (

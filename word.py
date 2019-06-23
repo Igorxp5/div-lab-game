@@ -6,7 +6,7 @@ class Word:
     def setWordStr(self, wordStr):
         self.wordStr = wordStr
 
-     def setSyllables(self, syllables):
+    def setSyllables(self, syllables):
         self.syllables = syllables
 
     def getWordStr(self):

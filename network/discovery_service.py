@@ -27,7 +27,6 @@ class DiscoveryService(Thread):
 			message, client = self._server.recvfrom(1024)
 			if client[0] != self._discoveryAddress[0]:
 				if message[:len(DiscoveryService.HEADER_FIRST_LINE)] == DiscoveryService.HEADER_FIRST_LINE:
-					print(client, message)
 					headers = DiscoveryService._discoveryParser(message)
 
 					if headers['TYPE'] == 'DISCOVERY':

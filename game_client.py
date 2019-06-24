@@ -48,7 +48,6 @@ class Game(Thread):
 		self._receiverGroupIps = {}
 
 	def listenPacketCallback(self, socket, packet):
-		print(socket.ip, socket.port, packet)
 		if packet.action == Action.CREATE_ROOM:
 			name = packet.params[ActionParam.ROOM_NAME]
 			limit = packet.params[ActionParam.PLAYERS_LIMIT]
@@ -88,7 +87,7 @@ if __name__ == '__main__':
 >>>>>>> p2p
 	for i, ip in enumerate(interfaces):
 		print(f'{i} - {ip}')
-	number_interface = int(input('Selecione a interface: '))
+	number_interface = int(input('\nSelecione a interface: '))
 	game = Game(interfaces[number_interface])
 	game.start()
 

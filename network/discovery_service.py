@@ -3,6 +3,7 @@ import socket
 from threading import Thread, Lock
 
 class DiscoveryService(Thread):
+	ENCODING = 'ascii'
 	HEADER_FIRST_LINE = b'DIVLABGAME-DISCOVERY\r\n'
 	MULTICAST_IP = '224.0.0.1'
 	DEFAULT_DISCOVER_TIMEOUT = 7
@@ -60,19 +61,19 @@ class DiscoveryService(Thread):
 	def _discoveryRequest(self):
 		request = DiscoveryService.HEADER_FIRST_LINE
 		ip, port = self._tcpAddress
-		request += f'TYPE: DISCOVERY\r\nHOST: {ip}:{port}\r\n\r\n'.encode('utf-8')
+		request += f'TYPE: DISCOVERY\r\nHOST: {ip}:{port}\r\n\r\n'.encode(DiscoveryService.ENCODING)
 		return request
 
 	def _discoveryResponse(self):
 		response = DiscoveryService.HEADER_FIRST_LINE
 		ip, port = self._tcpAddress
-		response += f'TYPE: RUNNING-APP\r\nHOST: {ip}:{port}\r\n\r\n'.encode('utf-8')
+		response += f'TYPE: RUNNING-APP\r\nHOST: {ip}:{port}\r\n\r\n'.encode(DiscoveryService.ENCODING)
 		return response
 
 	@staticmethod
 	def _discoveryParser(message):
 		message = message[len(DiscoveryService.HEADER_FIRST_LINE):]
-		headers = message.decode('utf-8').split('\r\n')
+		headers = message.decode(DiscoveryService.ENCODING).split('\r\n')
 		headers = [header for header in headers if header]
 		headers = [header.split(': ') for header in headers]
 		headers = {header: value for header, value in headers}

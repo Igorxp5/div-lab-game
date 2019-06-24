@@ -20,6 +20,8 @@ class PacketType(Enum):
         raise NotImplementedError
 
 class Packet:
+    ENCODING = 'utf-8'
+
     def __init__(self, packetType, action, uuid=None):
         self.packetType = packetType
         self.action = action
@@ -35,13 +37,13 @@ class Packet:
         return data
 
     def toBytes(self):
-        return str(self).encode('utf-8')
+        return str(self).encode(Packet.ENCODING)
 
     @staticmethod
     def parse(data):
         packet = None
 
-        message = data.decode('utf-8')
+        message = data.decode(Packet.ENCODING)
         headers_content = message.split('\r\n\r\n')
         headers_lines = headers_content[0].split('\r\n')
         headers = headers_lines[1:]

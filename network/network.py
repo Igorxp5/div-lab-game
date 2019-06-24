@@ -31,7 +31,6 @@ class Network(Thread):
 
 	def _discoveryAndConnectPeers(self):
 		addresses = self._discoveryService.discover(Network.DISCOVERY_TIMEOUT)
-		addresses.append(('25.8.118.125', 8401))
 		print(f'Descoberto {len(addresses)} endereços IP. Tentando contactá-los...')
 		for address in addresses:
 			Thread(target=self._connectToPeer, args=(address,), daemon=True).start()
@@ -43,9 +42,9 @@ class Network(Thread):
 
 			conn_client = tcpClient, address
 			
-			self._connections[client] = tcpClient
+			self._connections[address] = tcpClient
 			thread = Thread(target=self.listenConnection, args=conn_client, daemon=True)
-			self._listenThreads[client] = thread
+			self._listenThreads[address] = thread
 			thread.start()
 		except TimeoutError:
 			print(f'Não foi possível conectar-se a {address}')

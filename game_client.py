@@ -48,8 +48,11 @@ class Game(Thread):
 		self._receiverGroupIps = {}
 
 	def listenPacketCallback(self, socket, packet):
+		print(socket.ip, socket.port, packet)
 		if packet.action == Action.CREATE_ROOM:
-			print('Alguém tentou criar uma sala', packet.params)
+			name = packet.params[ActionParam.ROOM_NAME]
+			limit = packet.params[ActionParam.PLAYERS_LIMIT]
+			print(socket.ip, f'tentou criar uma sala - Nome: {name} | Limite: {limit}')
 
 	def createRoom(self, name, limit):
 		params = {
@@ -78,7 +81,11 @@ class Game(Thread):
 
 if __name__ == '__main__':
 	interfaces = sock.gethostbyname_ex(sock.gethostname())[2]
+<<<<<<< HEAD
 	print('Selecione interface: ')
+=======
+	print('Interface disponíveis: ')
+>>>>>>> p2p
 	for i, ip in enumerate(interfaces):
 		print(f'{i} - {ip}')
 	number_interface = int(input('Selecione a interface: '))

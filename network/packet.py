@@ -54,6 +54,7 @@ class Packet:
         action = Action.getById(int(headers['ACTION-ID']))
         uuid = headers['REQUEST-UUID']
         content = json.loads(headers_content[1])
+        content = {ActionParam.getByValue(key): value for key, value in content.items()}
         
         if packetType == PacketType.REQUEST:
             packet = PacketRequest(action, content, uuid=uuid)

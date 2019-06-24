@@ -1,6 +1,6 @@
 import time
 import socket
-from threading import Thread
+from threading import Thread, Lock
 
 class DiscoveryService(Thread):
 	HEADER_FIRST_LINE = b'DIVLABGAME-DISCOVERY\r\n'
@@ -15,9 +15,13 @@ class DiscoveryService(Thread):
 		multicast = socket.inet_aton(DiscoveryService.MULTICAST_IP) + socket.inet_aton(self._discoveryAddress[0])
 		self._server.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast)
 
+		self._waitServerStartLock = Lock()
+		self._waitServerStartLock.acquire()
+
 	def run(self):
 		self._server.bind(self._discoveryAddress)
 		print(f'Serviço de Descoberta em {self._discoveryAddress}...')
+		self._waitServerStartLock.release()
 		while True:
 			message, client = self._server.recvfrom(1024)
 			if client[0] != self._discoveryAddress[0]:
@@ -30,6 +34,7 @@ class DiscoveryService(Thread):
 						self._server.sendto(response, client)
 
 	def discover(self, timeout=DEFAULT_DISCOVER_TIMEOUT):
+		self._waitServerStartLock.acquire()
 		client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 		address = DiscoveryService.MULTICAST_IP, self._discoveryAddress[1]
 		message = self._discoveryRequest()

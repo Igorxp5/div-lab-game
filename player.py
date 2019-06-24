@@ -1,6 +1,6 @@
 from enum import Enum
 
-class UserStatus(Enum):
+class PlayerStatus(Enum):
     WATCHING                                            = 1
     VOTING_ON_THE_ROUND_ORGANIZER                       = 2
     AWAITING_THE_END_OF_ORGANIZER_VOTE                  = 3

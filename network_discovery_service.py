@@ -20,7 +20,7 @@ class DiscoveryService(Thread):
 		print(f'Serviço de Descoberta em {self._discoveryAddress}...')
 		while True:
 			message, client = self._server.recvfrom(1024)
-			if client[0] != self._discoveryAddress[0] or True:
+			if client[0] != self._discoveryAddress[0]:
 				if message[:len(DiscoveryService.HEADER_FIRST_LINE)] == DiscoveryService.HEADER_FIRST_LINE:
 					print(client, message)
 					headers = DiscoveryService._discoveryParser(message)
@@ -49,6 +49,7 @@ class DiscoveryService(Thread):
 			address = address[0], int(address[1])
 			addresses.append(address)
 
+		# Remover próprio endereço
 		return addresses
 
 	def _discoveryRequest(self):

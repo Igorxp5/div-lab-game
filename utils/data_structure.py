@@ -1,4 +1,4 @@
-class IDTable:
+class IdTable:
 	def __init__(self, get_id=None):
 		self._data = {}
 		self._sort_id = []

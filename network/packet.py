@@ -1,7 +1,7 @@
 import uuid
 import json
 
-from action import Action, ActionParam
+from .action import Action, ActionParam
 
 from enum import Enum
 

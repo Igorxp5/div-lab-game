@@ -1,7 +1,7 @@
 import socket
 
-from discovery_service import DiscoveryService
-from packet import Packet, PacketRequest, PacketResponse, PacketType
+from .discovery_service import DiscoveryService
+from .packet import Packet, PacketRequest, PacketResponse, PacketType
 
 from threading import Thread, Event
 

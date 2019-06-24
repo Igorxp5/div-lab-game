@@ -1,4 +1,4 @@
-from game.room import RoomStatus, GamePhase
+from .game.room import RoomStatus, GamePhase
 
 from enum import Enum
 

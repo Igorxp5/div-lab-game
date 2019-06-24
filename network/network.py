@@ -1,7 +1,7 @@
 import socket
 
-from network_discovery_service import DiscoveryService
-from network_packet import Packet, PacketRequest, PacketResponse, PacketType
+from discovery_service import DiscoveryService
+from packet import Packet, PacketRequest, PacketResponse, PacketType
 
 from threading import Thread, Event
 
@@ -66,9 +66,10 @@ class Network(Thread):
 		print('Conectado a', client)
 
 
-discoveryAddress = '25.8.61.75', 8400
-tcpAddress = '25.8.61.75', 8401
-network = Network(discoveryAddress, tcpAddress)
-network.start()
+if __name__ == '__main__':
+	discoveryAddress = '25.8.61.75', 8400
+	tcpAddress = '25.8.61.75', 8401
+	network = Network(discoveryAddress, tcpAddress)
+	network.start()
 
-while True: pass
+	while True: pass

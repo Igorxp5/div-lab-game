@@ -49,3 +49,11 @@ class Room:
 class RoomStatus(Enum):
     IN_GAME = 1
     ON_HOLD = 2
+
+class GamePhase(Enum):
+    ELECTING_MASTER_ROOM = 1
+    CHOOSING_ROUND_WORD = 2
+    WAITING_ANSWERS = 3
+    WAITING_CONTESTS = 4
+    ELECTING_CORRECT_ANSWER = 5
+    RESULT_ROUND = 6

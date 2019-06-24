@@ -1,5 +1,5 @@
 from room import RoomStatus
-from game import GamePhase
+# from game import GamePhase
 
 from enum import Enum
 
@@ -205,6 +205,13 @@ class Action(Enum):
 	@property
 	def codename(self):
 		return 'AC{:03d}'.format(self.id)
+
+	@staticmethod
+	def getById(id_):
+		for action in Action:
+			if id_ == action.id:
+				return action
+		raise NotImplementedError
 
 if __name__ == '__main__':
 	packetAction = Action.CHOOSE_ROUND_WORD

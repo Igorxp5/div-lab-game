@@ -54,13 +54,13 @@ class DiscoveryService(Thread):
 	def _discoveryRequest(self):
 		request = DiscoveryService.HEADER_FIRST_LINE
 		ip, port = self._tcpAddress
-		request += f'TYPE: DISCOVERY\r\nHOST: {ip}:{port}\r\n\r\n'.encode('ascii')
+		request += f'TYPE: DISCOVERY\r\nHOST: {ip}:{port}\r\n\r\n'.encode('utf-8')
 		return request
 
 	def _discoveryResponse(self):
 		response = DiscoveryService.HEADER_FIRST_LINE
 		ip, port = self._tcpAddress
-		response += f'TYPE: RUNNING-APP\r\nHOST: {ip}:{port}\r\n\r\n'.encode('ascii')
+		response += f'TYPE: RUNNING-APP\r\nHOST: {ip}:{port}\r\n\r\n'.encode('utf-8')
 		return response
 
 	@staticmethod

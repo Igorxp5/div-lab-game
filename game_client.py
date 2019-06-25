@@ -1,3 +1,4 @@
+import socket as sock
 import time
 
 from network.network import Network
@@ -76,7 +77,12 @@ class Game(Thread):
 
 
 if __name__ == '__main__':
-	game = Game('25.8.61.75')
+	interfaces = sock.gethostbyname_ex(sock.gethostname())[2]
+	print('Selecione interface: ')
+	for i, ip in enumerate(interfaces):
+		print(f'{i} - {ip}')
+	number_interface = int(input('Selecione a interface: '))
+	game = Game(interfaces[number_interface])
 	game.start()
 
 	while True: pass

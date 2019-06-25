@@ -21,6 +21,13 @@ class ActionParam(Enum):
 	def __str__(self):
 		return self.value
 
+	@staticmethod
+	def getByValue(value):
+		for action in ActionParam:
+			if value == action.value:
+				return action
+		raise NotImplementedError
+
 
 class ActionCondiction(Enum):
 	ROOM_STATUS_IN_GAME = lambda network, socketId, rooms, game, params: (

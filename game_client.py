@@ -48,8 +48,11 @@ class Game(Thread):
 		self._receiverGroupIps = {}
 
 	def listenPacketCallback(self, socket, packet):
+		print(socket.ip, socket.port, packet)
 		if packet.action == Action.CREATE_ROOM:
-			print('Alguém tentou criar uma sala', packet.params)
+			name = packet.params[ActionParam.ROOM_NAME]
+			limit = packet.params[ActionParam.PLAYERS_LIMIT]
+			print(socket.ip, 'tentou criar uma sala - Nome: {name} | Limite: {limit}')
 
 	def createRoom(self, name, limit):
 		params = {

@@ -53,8 +53,12 @@ class Packet:
         packetType = PacketType.getByValue(headers_lines[0])
         action = Action.getById(int(headers['ACTION-ID']))
         uuid = headers['REQUEST-UUID']
-        content = json.loads(headers_content[1])
-        content = {ActionParam.getByValue(key): value for key, value in content.items()}
+
+        content = None
+        if headers_content[1]:
+            content = json.loads(headers_content[1])
+            content = {ActionParam.getByValue(key): value for key, value in content.items()}
+            content = {key: key(value) for key, value in content.items()}
         
         if packetType == PacketType.REQUEST:
             packet = PacketRequest(action, content, uuid=uuid)
@@ -75,7 +79,7 @@ class PacketRequest(Packet):
     def __str__(self):
         base = super().__str__()
         if self.params:
-            params = {str(param): self.params[param] for param in self.params.keys()}
+            params = {str(param): param(self.params[param]) for param in self.params.keys()}
             data = f'\r\n{json.dumps(params)}\r\n\r\n'
             return base + data
         return base + '\r\n'

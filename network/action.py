@@ -10,91 +10,98 @@ class ActionGroup(Enum):
 
 
 class ActionParam(Enum):
-	ROOM_NAME = 'room_name'
-	PLAYERS_LIMIT = 'players_limit'
-	ROOM_ID = 'room_id'
-	PLAYER_NAME = 'player_name'
-	WORD_STRING = 'word_string'
-	WORD_DIVISION = 'word_division'
-	SOCKET_ID = 'socket_id'
+	ROOM_NAME = 'room_name', str
+	PLAYERS_LIMIT = 'players_limit', int
+	ROOM_ID = 'room_id', str
+	PLAYER_NAME = 'player_name', str
+	WORD_STRING = 'word_string', str
+	WORD_DIVISION = 'word_division', str
+	SOCKET_ID = 'socket_id', str
+
+	def __init__(self, key, type_):
+		self.key = key
+		self.type = type_
 
 	def __str__(self):
-		return self.value
+		return self.key
+
+	def __call__(self, value):
+		return self.type(value)
 
 	@staticmethod
-	def getByValue(value):
+	def getByValue(key):
 		for action in ActionParam:
-			if value == action.value:
+			if key == action.key:
 				return action
 		raise NotImplementedError
 
 
 class ActionCondiction(Enum):
-	ROOM_STATUS_IN_GAME = lambda network, socketId, rooms, game, params: (
+	ROOM_STATUS_IN_GAME = lambda network, socket, rooms, game, params: (
 		rooms.get(params[ActionParam.ROOM_ID]).roomStatus is RoomStatus.IN_GAME
 	)
-	ROOM_STATUS_IN_WAIT = lambda network, socketId, rooms, game, params: (
+	ROOM_STATUS_IN_WAIT = lambda network, socket, rooms, game, params: (
 		rooms.get(params[ActionParam.ROOM_ID]).roomStatus is RoomStatus.IN_WAIT
 	)
-	PLAYER_NOT_IN_ROOM = lambda network, socketId, rooms, game, params: (
-		all((socketId not in room.players for room in rooms))
+	PLAYER_NOT_IN_ROOM = lambda network, socket, rooms, game, params: (
+		len(rooms) == 0 or all((socket.ip not in room.players for room in rooms))
 	)
-	PLAYER_INSIDE_ROOM = lambda network, socketId, rooms, game, params: (
-		socketId in rooms.get(params[ActionParam.ROOM_ID]).players
+	PLAYER_INSIDE_ROOM = lambda network, socket, rooms, game, params: (
+		socket in rooms.get(params[ActionParam.ROOM_ID]).players
 	)
-	PLAYER_IS_OWNER_ROOM = lambda network, socketId, rooms, game, params: (
-		rooms.get(params[ActionParam.ROOM_ID]).owner.socket.id == socketId
+	PLAYER_IS_OWNER_ROOM = lambda network, socket, rooms, game, params: (
+		rooms.get(params[ActionParam.ROOM_ID]).owner.socket.id == socket
 	)
-	PLAYER_IS_MASTER_ROOM = lambda network, socketId, rooms, game, params: (
-		game and game.roundMaster and game.roundMaster.socket.id == socketId
+	PLAYER_IS_MASTER_ROOM = lambda network, socket, rooms, game, params: (
+		game and game.roundMaster and game.roundMaster.socket.id == socket
 	)
-	PLAYER_IS_NOT_MASTER_ROOM = lambda network, socketId, rooms, game, params: (
-		game and game.roundMaster and game.roundMaster.socket.id != socketId
+	PLAYER_IS_NOT_MASTER_ROOM = lambda network, socket, rooms, game, params: (
+		game and game.roundMaster and game.roundMaster.socket.id != socket
 	)
-	TIME_NOT_IS_UP = lambda network, socketId, rooms, game, params: (
+	TIME_NOT_IS_UP = lambda network, socket, rooms, game, params: (
 		game and game.phaseTime and game.phaseTime == 0
 	)
-	TIME_IS_UP = lambda network, socketId, rooms, game, params: (
+	TIME_IS_UP = lambda network, socket, rooms, game, params: (
 		game and game.phaseTime and game.phaseTime < 800
 	)
-	GAME_IS_WAITING_CONTESTS = lambda network, socketId, rooms, game, params: (
+	GAME_IS_WAITING_CONTESTS = lambda network, socket, rooms, game, params: (
 		game and game.phase is GamePhase.WAITING_CONTESTS
 	)
-	GAME_IS_ELECTING_MASTER_ROOM = lambda network, socketId, rooms, game, params: (
+	GAME_IS_ELECTING_MASTER_ROOM = lambda network, socket, rooms, game, params: (
 		game and game.phase is GamePhase.ELECTING_MASTER_ROOM
 	)
-	GAME_IS_ELECTING_CORRECT_ANSWER = lambda network, socketId, rooms, game, params: (
+	GAME_IS_ELECTING_CORRECT_ANSWER = lambda network, socket, rooms, game, params: (
 		game and game.phase is GamePhase.ELECTING_CORRECT_ANSWER
 	)
-	GAME_IS_WAITING_ANSWERS = lambda network, socketId, rooms, game, params: (
+	GAME_IS_WAITING_ANSWERS = lambda network, socket, rooms, game, params: (
 		game and game.phase is GamePhase.WAITING_ANSWERS
 	)
-	GAME_IS_RESULT_ROUND = lambda network, socketId, rooms, game, params: (
+	GAME_IS_RESULT_ROUND = lambda network, socket, rooms, game, params: (
 		game and game.phase is GamePhase.RESULT_ROUND
 	)
-	PLAYER_MISSED_ANSWER = lambda network, socketId, rooms, game, params: (
-		socketId in game.roundAnswers and game.roundAnswers.get(socketId) == game.roundWord
+	PLAYER_MISSED_ANSWER = lambda network, socket, rooms, game, params: (
+		socket in game.roundAnswers and game.roundAnswers.get(socket) == game.roundWord
 	)
-	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socketId, rooms, game, params: (
-		socketId in rooms.get(params[ActionParam.ROOM_ID]).players
+	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
+		socket in rooms.get(params[ActionParam.ROOM_ID]).players
 		and params[ActionParam.SOCKET_ID] in rooms.get(params[ActionParam.ROOM_ID]).players
 	)
-	CHOSEN_PLAYER_IS_NOT_MASTER_ROOM = lambda network, socketId, rooms, game, params: (
+	CHOSEN_PLAYER_IS_NOT_MASTER_ROOM = lambda network, socket, rooms, game, params: (
 		game and game.roundMaster and game.roundMaster.socket.id == params[ActionParam.SOCKET_ID]
 	)
-	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM = lambda network, socketId, rooms, game, params: (
+	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM = lambda network, socket, rooms, game, params: (
 		game and (
 			(game.roundMaster and game.roundMaster.socket.id == params[ActionParam.SOCKET_ID])
 			or (game.contestingPlayer and game.contestingPlayer.socket.id == params[ActionParam.SOCKET_ID])
 		)
 	)
-	PLAYER_CAN_BE_OWNER = lambda network, socketId, rooms, game, params: (
+	PLAYER_CAN_BE_OWNER = lambda network, socket, rooms, game, params: (
 		# TODO: Falta verificar se o jogador está desconectado
-		rooms.get(params[ActionParam.ROOM_ID]).players.index(socketId) == 1
+		rooms.get(params[ActionParam.ROOM_ID]).players.index(socket) == 1
 	)
 
-	def __call__(self, p2p, socketId, rooms, game, params):
-		return bool(self.value(socketId, rooms, game, params))
+	def __call__(self, network, socket, rooms, game, params):
+		return bool(self.value(network, socketId, rooms, game, params))
 
 
 class Action(Enum):

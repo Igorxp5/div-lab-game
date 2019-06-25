@@ -10,7 +10,7 @@ from threading import Thread, Event, Lock
 class Network(Thread):
 	MAX_LISTEN = 30
 	DISCOVERY_TIMEOUT = 3
-	TCP_RECEIVE_BYTES = 4096
+	TCP_RECEIVE_BYTES = 2**16
 
 	def __init__(self, discoveryAddress, tcpAddress):
 		super().__init__(daemon=True)
@@ -20,7 +20,8 @@ class Network(Thread):
 		self._discoveryService = DiscoveryService(discoveryAddress, tcpAddress)
 		self._tcpServer = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
 
-		self.shutdownFlag = Event()
+		self._socket = Socket(self._tcpAddress[0], self._tcpAddress[1], self._tcpServer)
+
 		self._blockUntilConnectToNetwork = Lock()
 
 		self._connections = {}
@@ -30,7 +31,14 @@ class Network(Thread):
 
 		self._blockUntilConnectToNetwork.acquire()
 
+	@property
+	def socket(self):
+		return self._socket
 
+	@property
+	def peers(self):
+		return {ip: socket for ip, socket in self._connections.items()}
+	
 	def run(self):
 		self._discoveryService.start()
 
@@ -77,7 +85,7 @@ class Network(Thread):
 		self._tcpServer.bind(self._tcpAddress)
 		self._tcpServer.listen(Network.MAX_LISTEN)
 
-		while not self.shutdownFlag.is_set():
+		while True:
 			conn_client = self._tcpServer.accept()
 			connection, client = conn_client
 			ip, port = client

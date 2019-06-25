@@ -1,3 +1,4 @@
+import sys
 import time
 import socket
 from threading import Thread, Lock
@@ -20,9 +21,11 @@ class DiscoveryService(Thread):
 		self._waitServerStartLock.acquire()
 
 	def run(self):
-		self._server.bind(self._discoveryAddress)
+		self._bindSocket()
 		print(f'Serviço de Descoberta em {self._discoveryAddress}...')
+		
 		self._waitServerStartLock.release()
+		
 		while True:
 			message, client = self._server.recvfrom(1024)
 			if client[0] != self._discoveryAddress[0]:
@@ -33,9 +36,12 @@ class DiscoveryService(Thread):
 						response = self._discoveryResponse()
 						self._server.sendto(response, client)
 
+		self._server.close()
+
 	def discover(self, timeout=DEFAULT_DISCOVER_TIMEOUT):
 		self._waitServerStartLock.acquire()
 		client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+		client.bind((self._discoveryAddress[0], 0))
 		address = DiscoveryService.MULTICAST_IP, self._discoveryAddress[1]
 		message = self._discoveryRequest()
 		client.sendto(message, address)
@@ -54,8 +60,16 @@ class DiscoveryService(Thread):
 			address = address[0], int(address[1])
 			addresses.append(address)
 
+		client.close()
+
 		# Remover próprio endereço
 		return addresses
+
+	def _bindSocket(self):
+		if sys.platform.startswith('win'):
+			self._server.bind(self._discoveryAddress)
+		else:
+			self._server.bind(('0.0.0.0', self._discoveryAddress[1]))
 
 	def _discoveryRequest(self):
 		request = DiscoveryService.HEADER_FIRST_LINE

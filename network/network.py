@@ -90,11 +90,26 @@ class Network(Thread):
 		print('Conectado a', socket.ip, socket.port)
 
 		while True:
-			data = socket.connection.recv(Network.TCP_RECEIVE_BYTES)
+			try:
+				data = socket.connection.recv(Network.TCP_RECEIVE_BYTES)
+			except ConnectionResetError:
+				data = None
+
+			if not data:
+				break
+			
 			packet = Packet.parse(data)
 
 			if self._listenPacketCallback:
 				self._listenPacketCallback(socket, packet)
+
+		self._disconnectFromSocket(socket)
+
+	def _disconnectFromSocket(self, socket):
+		socket.connection.close()
+		del self._connections[socket.ip]
+		del self._listenThreads[socket.ip]
+		print(f'Desconectado de {socket}')
 
 	def _sendPacketToPeer(self, socket, packet):
 		socket.connection.send(packet.toBytes())

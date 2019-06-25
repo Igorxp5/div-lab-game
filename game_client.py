@@ -41,18 +41,13 @@ class Game(Thread):
 		self._tcpAddress = address, Game.TCP_SERVER_PORT
 
 		self._network = Network(self._discoveryAddress, self._tcpAddress)
-		self._network.setListenPacketCallback(self.listenPacketCallback)
+		self._network.setListenPacketCallback(self._listenPacketCallback)
+		self._listenPacketCallbackByAction = {}
+
 		self._rooms = []
 
 		self._sharedGameData = None
-
 		self._receiverGroupIps = {}
-
-	def listenPacketCallback(self, socket, packet):
-		if packet.action == Action.CREATE_ROOM:
-			name = packet.params[ActionParam.ROOM_NAME]
-			limit = packet.params[ActionParam.PLAYERS_LIMIT]
-			print(socket.ip, f'tentou criar uma sala - Nome: {name} | Limite: {limit}')
 
 	def createRoom(self, name, limit):
 		params = {
@@ -66,14 +61,37 @@ class Game(Thread):
 		self._network.start()
 		self._network.blockUntilConnectToNetwork()
 
-		time.sleep(5)
-
-		# Somente Igor criar a sala
-		if self._tcpAddress[0] == '25.8.61.75':
-			self.createRoom('Sala de Teste', 30)
-
 		while True:
-			pass
+			input('Tecle Enter para recarregar o Packet Sender...\n')
+			from _game_controller_test import gameController
+			gameController(self)
+
+	def setListenPacketCallbackByAction(self, action, callback):
+		if not is_instance(action, Action):
+			raise TypeError('action must be a Action Enum.')
+		
+		if not action in self._listenPacketCallbackByAction:
+			self._listenPacketCallbackByAction[action] = []
+
+		self._listenPacketCallbackByAction[action].append(callback)
+
+	def removeListenPacketCallbackByAction(self, action, callback):
+		if not is_instance(action, Action):
+			raise TypeError('action must be a Action Enum.')
+
+		self._listenPacketCallbackByAction[action].remove(callback)
+
+
+	def _listenPacketCallback(self, socket, packet):
+		if packet.action == Action.CREATE_ROOM:
+			name = packet.params[ActionParam.ROOM_NAME]
+			limit = packet.params[ActionParam.PLAYERS_LIMIT]
+			print(socket.ip, f'tentou criar uma sala - Nome: {name} | Limite: {limit}')
+		
+		if packet.action in self._listenPacketCallbackByAction:
+			for callback in self._listenPacketCallbackByAction[packet.action]:
+				callback() 
+			
 
 	def _sendPacket(self, packet):
 		self._network.sendPacket(packet, self._receiverGroupIps)

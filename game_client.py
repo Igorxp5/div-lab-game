@@ -1,10 +1,11 @@
-import socket as sock
 import time
 
 from network.network import Network
 from network.packet import PacketRequest
 from network.action import Action, ActionGroup, ActionParam
+
 from utils.data_structure import IdTable
+from utils.network_interfaces import getAllIpAddress
 
 from threading import Thread
 
@@ -79,7 +80,7 @@ class Game(Thread):
 
 
 if __name__ == '__main__':
-	interfaces = sock.gethostbyname_ex(sock.gethostname())[2]
+	interfaces = getAllIpAddress()
 	print('Interface disponíveis: ')
 	for i, ip in enumerate(interfaces):
 		print(f'{i} - {ip}')

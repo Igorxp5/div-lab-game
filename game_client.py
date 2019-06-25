@@ -52,7 +52,7 @@ class Game(Thread):
 		if packet.action == Action.CREATE_ROOM:
 			name = packet.params[ActionParam.ROOM_NAME]
 			limit = packet.params[ActionParam.PLAYERS_LIMIT]
-			print(socket.ip, 'tentou criar uma sala - Nome: {name} | Limite: {limit}')
+			print(socket.ip, f'tentou criar uma sala - Nome: {name} | Limite: {limit}')
 
 	def createRoom(self, name, limit):
 		params = {

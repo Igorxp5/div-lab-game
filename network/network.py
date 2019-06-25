@@ -97,7 +97,6 @@ class Network(Thread):
 				self._listenPacketCallback(socket, packet)
 
 	def _sendPacketToPeer(self, socket, packet):
-		print('Enviando')
 		socket.connection.send(packet.toBytes())
 
 if __name__ == '__main__':

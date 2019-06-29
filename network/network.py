@@ -1,9 +1,9 @@
 import socket as sock
 
 from .game._socket import Socket
-from .action import ActionGroup
+from .action import ActionGroup, InvalidActionParams
 from .discovery_service import DiscoveryService
-from .packet import Packet, PacketRequest, PacketResponse, PacketType
+from .packet import Packet, PacketRequest, PacketResponse, PacketType, InvalidPacketError
 
 from threading import Thread, Event, Lock
 
@@ -105,11 +105,15 @@ class Network(Thread):
 
 			if not data:
 				break
-			
-			packet = Packet.parse(data)
+			try:
+				packet = Packet.parse(data)
 
-			if self._listenPacketCallback:
-				self._listenPacketCallback(socket, packet)
+				if self._listenPacketCallback:
+					self._listenPacketCallback(socket, packet)
+			except InvalidPacketError:
+				print(f'Invalid Packet arrived from {socket} was ignored.')
+			except InvalidActionParams:
+				print(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
 
 		self._disconnectFromSocket(socket)
 

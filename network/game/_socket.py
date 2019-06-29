@@ -7,6 +7,9 @@ class Socket:
     def __str__(self):
         return f'{self.__class__.__name__}({self.ip}, {self.port})'
 
+    def __repr__(self):
+        return str(self)
+
     def setIp(self, ip):
         self.ip = ip
 

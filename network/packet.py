@@ -1,9 +1,13 @@
 import uuid
 import json
 
-from .action import Action, ActionParam
+from .action import Action, ActionParam, InvalidActionParams
 
 from enum import Enum
+
+class InvalidPacketError(RuntimeError):
+    def __init__(self, message=''):
+        super().__init__(message)
 
 class PacketType(Enum):
     REQUEST = 'DIVLABGAME-ACTION-REQUEST'
@@ -51,20 +55,31 @@ class Packet:
         headers = [header.split(': ') for header in headers]
         headers = {header: value for header, value in headers}
         packetType = PacketType.getByValue(headers_lines[0])
-        action = Action.getById(int(headers['ACTION-ID']))
-        uuid = headers['REQUEST-UUID']
 
-        content = None
-        if headers_content[1]:
-            content = json.loads(headers_content[1])
-            content = {ActionParam.getByValue(key): value for key, value in content.items()}
-            content = {key: key(value) for key, value in content.items()}
-        
-        if packetType == PacketType.REQUEST:
-            packet = PacketRequest(action, content, uuid=uuid)
-        if packetType == PacketType.RESPONSE:
-            approved = headers['APPROVED'] == 'True'
-            packet = PacketResponse(action, approved, content, uuid=uuid)
+        try:
+            action = Action.getById(int(headers['ACTION-ID']))
+
+            uuid = headers['REQUEST-UUID']
+
+            content = None
+            if headers_content[1]:
+                content = json.loads(headers_content[1])
+                content = {ActionParam.getByValue(key): value for key, value in content.items()}
+                content = {key: key(value) for key, value in content.items()}
+            
+            if packetType == PacketType.REQUEST:
+                packet = PacketRequest(action, content, uuid=uuid)
+
+                if not all([param in content for param in action.params]):
+                    raise InvalidActionParams
+
+            if packetType == PacketType.RESPONSE:
+                approved = headers['APPROVED'] == 'True'
+                packet = PacketResponse(action, approved, content, uuid=uuid)
+
+        except NotImplementedError:
+            raise InvalidPacketError
+
         return packet
 
     @staticmethod

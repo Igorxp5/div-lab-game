@@ -2,6 +2,10 @@ from .game.room import RoomStatus, GamePhase
 
 from enum import Enum
 
+class InvalidActionParams(RuntimeError):
+	def __init__(self, message=''):
+		super().__init__(message)
+
 class ActionGroup(Enum):
 	ALL_NETWORK = 0
 	ROOM_PLAYERS = 1
@@ -16,7 +20,7 @@ class ActionParam(Enum):
 	PLAYER_NAME = 'player_name', str
 	WORD_STRING = 'word_string', str
 	WORD_DIVISION = 'word_division', str
-	SOCKET_ID = 'socket_id', str
+	SOCKET_IP = 'socket_ip', str
 
 	def __init__(self, key, type_):
 		self.key = key
@@ -50,13 +54,13 @@ class ActionCondiction(Enum):
 		socket in rooms.get(params[ActionParam.ROOM_ID]).players
 	)
 	PLAYER_IS_OWNER_ROOM = lambda network, socket, rooms, game, params: (
-		rooms.get(params[ActionParam.ROOM_ID]).owner.socket.id == socket
+		rooms.get(params[ActionParam.ROOM_ID]).owner.socket.ip == socket
 	)
 	PLAYER_IS_MASTER_ROOM = lambda network, socket, rooms, game, params: (
-		game and game.roundMaster and game.roundMaster.socket.id == socket
+		game and game.roundMaster and game.roundMaster.socket.ip == socket
 	)
 	PLAYER_IS_NOT_MASTER_ROOM = lambda network, socket, rooms, game, params: (
-		game and game.roundMaster and game.roundMaster.socket.id != socket
+		game and game.roundMaster and game.roundMaster.socket.ip != socket
 	)
 	TIME_NOT_IS_UP = lambda network, socket, rooms, game, params: (
 		game and game.phaseTime and game.phaseTime == 0
@@ -80,19 +84,20 @@ class ActionCondiction(Enum):
 		game and game.phase is GamePhase.RESULT_ROUND
 	)
 	PLAYER_MISSED_ANSWER = lambda network, socket, rooms, game, params: (
-		socket in game.roundAnswers and game.roundAnswers.get(socket) == game.roundWord
+		socket in game.roundAnswers and game.roundAnswers.get(socket.ip, None) == game.roundWord
 	)
 	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
-		socket in rooms.get(params[ActionParam.ROOM_ID]).players
-		and params[ActionParam.SOCKET_ID] in rooms.get(params[ActionParam.ROOM_ID]).players
+		socket in rooms.get(params[ActionParam.ROOM_ID]).players and 
+		params[ActionParam.SOCKET_IP] in rooms.get(params[ActionParam.ROOM_ID], []).players
 	)
 	CHOSEN_PLAYER_IS_NOT_MASTER_ROOM = lambda network, socket, rooms, game, params: (
-		game and game.roundMaster and game.roundMaster.socket.id == params[ActionParam.SOCKET_ID]
+		game and game.roundMaster and 
+		game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP]
 	)
 	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM = lambda network, socket, rooms, game, params: (
 		game and (
-			(game.roundMaster and game.roundMaster.socket.id == params[ActionParam.SOCKET_ID])
-			or (game.contestingPlayer and game.contestingPlayer.socket.id == params[ActionParam.SOCKET_ID])
+			(game.roundMaster and game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
+			or (game.contestingPlayer and game.contestingPlayer.socket.ip == params[ActionParam.SOCKET_IP])
 		)
 	)
 	PLAYER_CAN_BE_OWNER = lambda network, socket, rooms, game, params: (
@@ -106,7 +111,7 @@ class ActionCondiction(Enum):
 
 class Action(Enum):
 	CREATE_ROOM = (1, 'Create Room', 'w', 
-				   (ActionParam.ROOM_NAME, ActionParam.PLAYERS_LIMIT), 
+				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, ActionParam.PLAYERS_LIMIT), 
 				   (ActionCondiction.PLAYER_NOT_IN_ROOM,), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
@@ -139,7 +144,7 @@ class Action(Enum):
 				 ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	CHOOSE_VOTE_ELECTION_ROUND_MASTER = (7, 'Choose Vote Election Round Master', 'w', 
-										 (ActionParam.ROOM_ID, ActionParam.SOCKET_ID), 
+										 (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 										 (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 										 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, ActionCondiction.GAME_IS_ELECTING_MASTER_ROOM,
 										 	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.CHOSEN_PLAYER_IS_NOT_MASTER_ROOM), 
@@ -153,7 +158,7 @@ class Action(Enum):
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', 'w', 
-								  (ActionParam.ROOM_ID, ActionParam.SOCKET_ID), 
+								  (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 								  (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 								 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, ActionCondiction.GAME_IS_ELECTING_CORRECT_ANSWER,
 								 	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM), 
@@ -170,7 +175,7 @@ class Action(Enum):
 						   ActionGroup.ROOM_OWNER, ActionGroup.ROOM_OWNER)
 
 	KICK_PLAYER_ROOM = (12, 'Kick Player of Room', 'w', 
-						(ActionParam.ROOM_ID, ActionParam.SOCKET_ID), 
+						(ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 						(ActionCondiction.PLAYER_IS_OWNER_ROOM, ActionCondiction.ROOM_STATUS_IN_WAIT,
 						 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM), 
 						ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)

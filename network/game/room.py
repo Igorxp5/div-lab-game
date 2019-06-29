@@ -2,8 +2,8 @@ from enum import Enum
 
 class Room:
     
-    def __init__(self, id, name, limitPlayers, owner, players, status):
-        self.id             = id
+    def __init__(self, id_, name, limitPlayers, owner, players, status):
+        self.id             = id_
         self.name           = name
         self.limitPlayers   = limitPlayers
         self.owner          = owner

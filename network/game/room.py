@@ -1,5 +1,9 @@
+import json
 import uuid
+
 from enum import Enum
+
+from .player import Player
 
 from utils.data_structure import JsonSerializable
 
@@ -9,6 +13,13 @@ class RoomStatus(JsonSerializable, Enum):
 
     def _basicValue(self):
         return self.value
+
+    @staticmethod
+    def getByValue(value):
+        for action in RoomStatus:
+            if value == action.value:
+                return action
+        raise NotImplementedError
 
 class GamePhase(JsonSerializable, Enum):
     ELECTING_MASTER_ROOM = 1
@@ -20,6 +31,13 @@ class GamePhase(JsonSerializable, Enum):
 
     def _basicValue(self):
         return self.value
+
+    @staticmethod
+    def getByValue(value):
+        for action in RoomStatus:
+            if value == action.value:
+                return action
+        raise NotImplementedError
 
 class Room(JsonSerializable):
     
@@ -82,4 +100,15 @@ class Room(JsonSerializable):
         id_ = str(uuid.uuid1())
         players = []
         status = RoomStatus.ON_HOLD
+        return Room(id_, name, limitPlayers, owner, players, status)
+
+    @staticmethod
+    def _parseJson(jsonDict, sockets):
+        id_ = jsonDict['id']
+        name = jsonDict['name']
+        limitPlayers = jsonDict['limitPlayers']
+        owner = sockets[jsonDict['owner']]
+        players = jsonDict['players']
+        players = [Player.parseJson(json.dumps(player), sockets) for player in players]
+        status = RoomStatus.getByValue(jsonDict['status'])
         return Room(id_, name, limitPlayers, owner, players, status)

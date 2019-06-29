@@ -30,6 +30,12 @@ class Word(JsonSerializable):
         }
 
     @staticmethod
+    def _parseJson(jsonDict):
+        wordStr = jsonDict['wordStr']
+        syllables = jsonDict['syllables']
+        return Word(wordStr, syllables)
+
+    @staticmethod
     def _hashStr(string):
         encodedSyllables = string.encode(Word.ENCODING)
         return hashlib.sha1(encodedSyllables).hexdigest()

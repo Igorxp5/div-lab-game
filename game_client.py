@@ -39,16 +39,49 @@ class SharedGameData(JsonSerializable):
 			'roundWord': self.roundWord,
 			'gamePhase': self.gamePhase,
 			'chosenWords': self.chosenWords,
-			'masterRoomVotes': self.masterRoomVotes,
-			'contestAnswerVotes': self.contestAnswerVotes,
+			'masterRoomVotes': {ip: votePlayer.socket for ip, votePlayer in self.masterRoomVotes.items()},
+			'contestAnswerVotes': {ip: votePlayer.socket for ip, votePlayer in self.contestAnswerVotes.items()},
 			'roundAnswers': self.roundAnswers,
 			'roundNumber': self.roundNumber,
 			'phaseTime': self.phaseTime
 		}
 
 	@staticmethod
-	def parseJson(json_data):
+	def _parseJson(jsonDict, sockets):
 		sharedGameData = SharedGameData()
+		
+		roomJsonData = json.dumps(jsonDict['room'])
+		sharedGameData.room = Room.parseJson(roomJsonData, sockets)
+
+		roomMasterJsonData = json.dumps(jsonDict['roomMaster'])
+		sharedGameData.roomMaster = Player.parseJson(roomMasterJsonData, sockets)
+
+		roundWordJsonData = json.dumps(jsonDict['roundWord'])
+		sharedGameData.roundWord = Word.parseJson(roundWordJsonData)
+
+		sharedGameData.gamePhase = GamePhase.getByValue(jsonDict['gamePhase'])
+
+		for wordDict in jsonDict['chosenWords']:
+			wordJsonData = json.dumps(wordDict)
+			word = Word.parseJson(wordJsonData)
+			sharedGameData.chosenWords.append(word)
+
+		for ip, voteIp in jsonDict['masterRoomVotes']:
+			sharedGameData.masterRoomVotes[ip] = sharedGameData.room.players[voteIp]
+
+		for ip, voteIp in jsonDict['contestAnswerVotes']:
+			sharedGameData.masterRoomVotes[ip] = sharedGameData.room.players[voteIp]
+		
+		for ip, playerAnswerDict in jsonDict['roundAnswers']:
+			playerAnswerJsonData = json.dumps(playerAnswerDict)
+			playerAnswer = PlayerAnswer.parseJson(
+				playerAnswerJsonData, sharedGameData.room.players
+			)
+			sharedGameData.roundAnswers[ip] = playerAnswer
+
+		sharedGameData.roundNumber = jsonDict['roundNumber']
+		sharedGameData.phaseTime = jsonDict['phaseTime']
+		
 		return sharedGameData
 
 

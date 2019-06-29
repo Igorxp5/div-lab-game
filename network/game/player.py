@@ -1,3 +1,5 @@
+import json
+
 from enum import Enum
 
 from utils.data_structure import JsonSerializable
@@ -18,10 +20,17 @@ class PlayerStatus(JsonSerializable, Enum):
     def _basicValue(self):
         return self.value
 
+    @staticmethod
+    def getByValue(value):
+        for action in PlayerStatus:
+            if value == action.value:
+                return action
+        raise NotImplementedError
+
 class Player(JsonSerializable):
     def __init__(self, nickname, socket, status):
         self.nickname           = nickname
-        self.socket             = socket        
+        self.socket             = socket
         self.status             = status
 
     def setNickname(self, nickname):
@@ -55,6 +64,13 @@ class Player(JsonSerializable):
             'status': self.status
         }
 
+    @staticmethod
+    def _parseJson(jsonDict, sockets):
+        nickname = jsonDict['nickname']
+        socket = sockets[jsonDict['socket']]
+        status = PlayerStatus.getByValue(jsonDict['status'])
+        return Player(nickname, socket, status)
+
 class PlayerAnswer(JsonSerializable):
     def __init__(self, owner, word):
         self.owner    = owner
@@ -77,3 +93,9 @@ class PlayerAnswer(JsonSerializable):
             'owner': self.owner,
             'word': self.word
         }
+
+    @staticmethod
+    def _parseJson(jsonDict, players):
+        owner = [player for player in players if player.socket.ip == jsonDict['owner']['socket']][0]
+        word = Word.parseJson(json.dumps(jsonDict['word']))
+        return PlayerAnswer(owner, word)

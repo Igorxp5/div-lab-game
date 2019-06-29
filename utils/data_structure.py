@@ -48,7 +48,16 @@ class JsonSerializable:
 		raise NotImplementedError
 
 	def _basicValue(self):
-		raise NotImplementedError		
+		raise NotImplementedError
+
+	@classmethod
+	def parseJson(cls, jsonData, *args, **kwargs):
+		jsonDict = json.loads(jsonData)
+		return cls._parseJson(jsonDict, *args, **kwargs)
+
+	@staticmethod
+	def _parseJson(jsonDict, *args, **kwargs):
+		raise NotImplementedError
 
 	@staticmethod
 	def _defaultSerialize(obj):

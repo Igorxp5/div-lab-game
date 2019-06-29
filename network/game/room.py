@@ -1,6 +1,27 @@
+import uuid
 from enum import Enum
 
-class Room:
+from utils.data_structure import JsonSerializable
+
+class RoomStatus(JsonSerializable, Enum):
+    IN_GAME = 1
+    ON_HOLD = 2
+
+    def _basicValue(self):
+        return self.value
+
+class GamePhase(JsonSerializable, Enum):
+    ELECTING_MASTER_ROOM = 1
+    CHOOSING_ROUND_WORD = 2
+    WAITING_ANSWERS = 3
+    WAITING_CONTESTS = 4
+    ELECTING_CORRECT_ANSWER = 5
+    RESULT_ROUND = 6
+
+    def _basicValue(self):
+        return self.value
+
+class Room(JsonSerializable):
     
     def __init__(self, id_, name, limitPlayers, owner, players, status):
         self.id             = id_
@@ -46,14 +67,19 @@ class Room:
     def getStatus(self):
         return self.status
 
-class RoomStatus(Enum):
-    IN_GAME = 1
-    ON_HOLD = 2
+    def _dictKeyProperty(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'limitPlayers': self.limitPlayers,
+            'owner': self.owner,
+            'players': self.players,
+            'status': self.status
+        }
 
-class GamePhase(Enum):
-    ELECTING_MASTER_ROOM = 1
-    CHOOSING_ROUND_WORD = 2
-    WAITING_ANSWERS = 3
-    WAITING_CONTESTS = 4
-    ELECTING_CORRECT_ANSWER = 5
-    RESULT_ROUND = 6
+    @staticmethod
+    def createRoom(name, limitPlayers, owner):
+        id_ = str(uuid.uuid1())
+        players = []
+        status = RoomStatus.ON_HOLD
+        return Room(id_, name, limitPlayers, owner, players, status)

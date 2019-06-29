@@ -1,6 +1,8 @@
 from enum import Enum
 
-class PlayerStatus(Enum):
+from utils.data_structure import JsonSerializable
+
+class PlayerStatus(JsonSerializable, Enum):
     WATCHING                                            = 1
     VOTING_ON_THE_ROUND_ORGANIZER                       = 2
     AWAITING_THE_END_OF_ORGANIZER_VOTE                  = 3
@@ -13,15 +15,14 @@ class PlayerStatus(Enum):
     WAITING_FOR_NEXT_ROUND                              = 10
     ELIMINATED                                          = 11
 
-class Player:
-    def __init__(self, nickname, socket, status, chosenWords, successfulWords, wordsAnswered, score):
+    def _basicValue(self):
+        return self.value
+
+class Player(JsonSerializable):
+    def __init__(self, nickname, socket, status):
         self.nickname           = nickname
         self.socket             = socket        
         self.status             = status
-        self.chosenWords        = chosenWords
-        self.successfulWords    = successfulWords
-        self.wordsAnswered      = wordsAnswered
-        self.score              = score
 
     def setNickname(self, nickname):
         self.nickname = nickname
@@ -40,24 +41,6 @@ class Player:
     
     def getStatus(self):
         return self.status
-    
-    def setChosenWords(self, chosenWords):
-        self.chosenWords = chosenWords
-    
-    def getChosenWords(self):
-        return self.chosenWords
-
-    def setSuccessfulWords(self, successfulWords):
-        self.successfulWords = successfulWords
-    
-    def getSuccessfulWords(self, successfulWords):
-        return self.successfulWords
-    
-    def setWordsAnswered(self, wordsAnswered):
-        self.wordsAnswered = wordsAnswered
-    
-    def getWordsAnswered(self):
-        return self.wordsAnswered
 
     def setScore(self, score):
         self.score = score
@@ -65,19 +48,32 @@ class Player:
     def getScore(self):
         return self.score
 
-class PlayerAnswer:
-    def __init__(self, elector, vote):
-        self.elector    = elector
-        self.vote  = vote
+    def _dictKeyProperty(self):
+        return {
+            'nickname': self.nickname,
+            'socket': self.socket,
+            'status': self.status
+        }
 
-    def setElector(self, elector):
-        self.elector = elector
+class PlayerAnswer(JsonSerializable):
+    def __init__(self, owner, word):
+        self.owner    = owner
+        self.word  = word
 
-    def setVote(self, vote):
-        self.vote = vote
+    def setElector(self, owner):
+        self.owner = owner
+
+    def setWord(self, word):
+        self.word = word
 
     def getElector(self):
-        return self.elector
+        return self.owner
 
-    def getVote(self):
-        return self.vote
+    def getWord(self):
+        return self.word
+
+    def _dictKeyProperty(self):
+        return {
+            'owner': self.owner,
+            'word': self.word
+        }

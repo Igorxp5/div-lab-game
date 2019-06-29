@@ -1,4 +1,6 @@
-class Socket:
+from utils.data_structure import JsonSerializable
+
+class Socket(JsonSerializable):
     def __init__(self, ip, port, connection):
         self.ip     = ip
         self.port   = port
@@ -21,3 +23,6 @@ class Socket:
 
     def getPort(self):
         return self.port
+
+    def _basicValue(self):
+        return self.ip

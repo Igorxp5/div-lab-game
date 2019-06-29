@@ -4,8 +4,12 @@ from network.network import Network
 from network.packet import PacketRequest, PacketResponse, PacketType, InvalidPacketError
 from network.action import Action, ActionGroup, ActionParam
 
-from utils.data_structure import IdTable
+from utils.data_structure import JsonSerializable
 from utils.network_interfaces import getAllIpAddress
+
+from network.game.room import Room, RoomStatus, GamePhase
+from network.game.player import Player, PlayerStatus, PlayerAnswer
+from network.game.word import Word
 
 from threading import Thread
 from datetime import datetime
@@ -13,22 +17,34 @@ from importlib import reload
 
 import _game_controller_test
 
-class SharedGameData:
+class SharedGameData(JsonSerializable):
 	def __init__(self):
 		self.room 				= None
 		self.roomMaster 		= None
 		self.roundWord 			= None
 		self.gamePhase 			= None
 
-		self.players 			= IdTable()
 		self.chosenWords 		= []
-		self.masterRoomVotes 	= []
-		self.contestAnswerVotes = []
+		self.masterRoomVotes 	= {}
+		self.contestAnswerVotes = {}
 		self.roundAnswers 		= {}
 		
 		self.roundNumber 		= 0
-		self.timePhase 			= 0
+		self.phaseTime 			= 0
 
+	def _dictKeyProperty(self):
+		return {
+			'room': self.room,
+			'roomMaster': self.roomMaster,
+			'roundWord': self.roundWord,
+			'gamePhase': self.gamePhase,
+			'chosenWords': self.chosenWords,
+			'masterRoomVotes': self.masterRoomVotes,
+			'contestAnswerVotes': self.contestAnswerVotes,
+			'roundAnswers': self.roundAnswers,
+			'roundNumber': self.roundNumber,
+			'phaseTime': self.phaseTime
+		}
 
 	@staticmethod
 	def parseJson(json_data):
@@ -50,7 +66,7 @@ class Game(Thread):
 		self._network.setListenPacketCallback(self._listenPacketCallback)
 
 		self._rooms = []
-		self._sharedGameData = SharedGameData()
+		self._sharedGameData = None
 		self._receiverGroupIps = {}
 
 		# Adicionando callbacks para os tipos de pacotes

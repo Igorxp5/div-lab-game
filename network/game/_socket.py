@@ -12,6 +12,12 @@ class Socket(JsonSerializable):
     def __repr__(self):
         return str(self)
 
+    def __eq__(self, other):
+        return self.ip == other.ip and self.port == other.port
+
+    def __hash__(self):
+        return hash(self.__class__.__name__) + hash(f'{self.ip}:{self.port}') 
+
     def setIp(self, ip):
         self.ip = ip
 

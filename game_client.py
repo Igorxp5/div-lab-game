@@ -107,7 +107,7 @@ class Game(Thread):
 		self._listenPacketCallbackByAction = {action: [] for action in Action}
 		self._listenPacketCallbackByAction[Action.CREATE_ROOM].append(self._createRoomCallback)
 		self._listenPacketCallbackByAction[Action.GET_LIST_ROOMS].append(self._getListRoomsCallback)
-		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomCallback)
+		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomToPlayCallback)
 
 		self._packetWaitingApprovation = {}
 		self._donePacketHandler = set()
@@ -163,7 +163,7 @@ class Game(Thread):
 		self._sendPacketRequest(packet)
 		return room
 
-	def joinRoom(self, roomId, playerName):
+	def joinRoomToPlay(self, roomId, playerName):
 		params = {
 			ActionParam.ROOM_ID: roomId,
 			ActionParam.PLAYER_NAME: playerName
@@ -191,21 +191,19 @@ class Game(Thread):
 		elif packet.action.rw == ActionRw.WRITE:
 			self._waiterHandler(socket, packet)
 
-	def _packetApprovedCallback(self, packetApproved):
-		packet = self._packetWaitingApprovation[packetApproved.uuid]['request_packet']
-		socket = self._packetWaitingApprovation[packetApproved.uuid]['request_socket']
-		
-		# packetResponses = list(self._packetWaitingApprovation[packetApproved.uuid]['responses'].values())
-		# mostCommonPacketResponse = max(set(packetResponses), key=packetResponses.count)
+	def _packetApprovedCallback(self, socket, packet, responses):
+		listResponses = list(responses.values())
+		mostCommonPacketResponse = max(set(listResponses), key=listResponses.count)
+		actionError = mostCommonPacketResponse.actionError
 
 		if packet.action in self._listenPacketCallbackByAction:
 			for callback in self._listenPacketCallbackByAction[packet.action]:
-				callback(socket, packet.params)
+				callback(socket, packet.params, actionError)
 
 	def _actionReadPacketCallback(self, socket, packet):
 		if packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketRequest):
 			content = {id_: room.toJsonDict() for id_, room in self._rooms.items()}
-			packet = PacketResponse(packet.action, True, content=content, uuid=packet.uuid)
+			packet = PacketResponse(packet.action, content=content, uuid=packet.uuid)
 			self._sendPacket(packet, toSocket=socket)	
 		
 		elif packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketResponse):
@@ -217,22 +215,28 @@ class Game(Thread):
 				roomJsonData = json.dumps(room)
 				self._rooms[id_] = Room.parseJson(roomJsonData, self._network.allNetwork)
 
-	def _createRoomCallback(self, socket, params):
-		id_ = params[ActionParam.ROOM_ID]
-		name = params[ActionParam.ROOM_NAME]
-		limitPlayers = params[ActionParam.PLAYERS_LIMIT]
-		room = Room(
-			id_, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
-		)
-		self._rooms[id_] = room
-		print(f'O {socket} criou a sala {repr(name)} (Limite: {limitPlayers})')
+	def _createRoomCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			id_ = params[ActionParam.ROOM_ID]
+			name = params[ActionParam.ROOM_NAME]
+			limitPlayers = params[ActionParam.PLAYERS_LIMIT]
+			room = Room(
+				id_, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
+			)
+			self._rooms[id_] = room
+			print(f'O {socket} criou a sala {repr(name)} (Limite: {limitPlayers})')
+		else:
+			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
 
-	def _joinRoomCallback(self, socket, params):
-		roomId = params[ActionParam.ROOM_ID]
-		playerName = params[ActionParam.PLAYER_NAME]
-		player = Player(playerName, socket, PlayerStatus.ON_HOLD)
-		self._rooms[roomId].players.append(player)
-		print(f'O {socket} entrou na sala \'{self._rooms[roomId].name}\' como \'{playerName}\'')
+	def _joinRoomToPlayCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			roomId = params[ActionParam.ROOM_ID]
+			playerName = params[ActionParam.PLAYER_NAME]
+			player = Player(playerName, socket, PlayerStatus.ON_HOLD)
+			self._rooms[roomId].players.append(player)
+			print(f'O {socket} entrou na sala \'{self._rooms[roomId].name}\' como \'{playerName}\'')
+		else:
+			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
 
 	def _sendPacketRequest(self, packet, toSocket=None):
 		self._sendPacket(packet, toSocket)
@@ -257,54 +261,79 @@ class Game(Thread):
 				'lock': Lock()
 			}
 
+	def _deletePacketWaiter(self, packet):
+		if packet.uuid in self._packetWaitingApprovation:
+			del self._packetWaitingApprovation[packet.uuid]
+
 	def _savePacketRequestWaiter(self, socket, packet):
 		self._packetWaitingApprovation[packet.uuid]['request_socket'] = socket
 		self._packetWaitingApprovation[packet.uuid]['request_packet'] = packet
 
 	def _waiterHandler(self, socket, packet):
-		# Ignorar pacotes de ações já aprovadas ou desaprovadas
-		if packet.uuid in self._donePacketHandler:
-			return
-
 		self._createPacketWaiter(packet)
 
-		packetResponse = None
-		approvationSocket  = None
+		packetWaiter = self._packetWaitingApprovation[packet.uuid]
 
-		self._packetWaitingApprovation[packet.uuid]['lock'].acquire()
+		packetWaiter['lock'].acquire()
+
+		# Ignorar pacotes de ações já aprovadas ou desaprovadas
+		if packet.uuid in self._donePacketHandler:
+			self._deletePacketWaiter(packet)
+			packetWaiter['lock'].release()
+			return
 
 		if packet.packetType == PacketType.REQUEST:
+			if not self._isValidPacket(socket, packet):
+				self._deletePacketWaiter(packet)
+				packetWaiter['lock'].release()
+				return
+
 			self._savePacketRequestWaiter(socket, packet)
 
 			if self._isSocketInApprovationGroup(self._network.socket, packet):
 				actionError = self._testPacketConditions(socket, packet)
-				approvation = bool(actionError)
-				packetResponse = PacketResponse(
-					packet.action, approvation, actionError, uuid=packet.uuid
-				)
+				packetResponse = PacketResponse(packet.action, actionError, uuid=packet.uuid)
 				self._sendPacket(packetResponse)
 
 		elif packet.packetType == PacketType.RESPONSE:
-			self._packetWaitingApprovation[packet.uuid]['responses'][socket.ip] = packet
+			packetWaiter['responses'][socket.ip] = packet
 			
-			approvationList = self._packetWaitingApprovation[packet.uuid]['agreements_list']
+			approvationList = packetWaiter['agreements_list']
 			if not packet.approved:
-				approvationList = self._packetWaitingApprovation[packet.uuid]['disagreements_list']
+				approvationList = packetWaiter['disagreements_list']
 			approvationList.append(socket)
 
 
 		isPacketApproved = self._isPacketApproved(socket, packet)
 		isPacketDisapproved = self._isPacketDisapproved(socket, packet)
-		self._packetWaitingApprovation[packet.uuid]['lock'].release()
-
-		if isPacketApproved:
-			self._donePacketHandler.add(packet.uuid)
-			self._packetApprovedCallback(packet)
-		elif isPacketDisapproved:
-			self._donePacketHandler.add(packet.uuid)
 
 		if isPacketApproved or isPacketDisapproved:
+			requestSocket = packetWaiter['request_socket']
+			requestPacket = packetWaiter['request_packet']
+			responses = packetWaiter['responses']
+			Thread(
+				target=self._packetApprovedCallback, 
+				args=(requestSocket, requestPacket, responses)
+			).start()
+
+		if isPacketApproved or isPacketDisapproved:
+			self._donePacketHandler.add(packet.uuid)
 			del self._packetWaitingApprovation[packet.uuid]
+
+		packetWaiter['lock'].release()
+
+	def _isValidPacket(self, socket, packet):
+		valid = True
+		approvationGroup = packet.action.approvationGroup
+		if ((approvationGroup == ActionGroup.ROOM_PLAYERS or
+				approvationGroup == ActionGroup.ROOM_OWNER) and  
+				packet.params[ActionParam.ROOM_ID] not in self._rooms):
+			valid = False
+		
+		if not valid:
+			print(f'Game Packet invalid arrived from {socket} was ignored.')
+		
+		return valid	
 
 	def _isSocketInApprovationGroup(self, socket, packet):
 		result = None
@@ -324,7 +353,7 @@ class Game(Thread):
 	def _testPacketConditions(self, socket, packet):
 		for conditions in packet.action.conditions:
 			actionError = conditions(self._network, socket, self._rooms, self._sharedGameData, packet.params)
-			if not actionError:
+			if actionError != ActionError.NONE:
 				return actionError
 		return ActionError.NONE
 
@@ -333,21 +362,14 @@ class Game(Thread):
 		fullGroup = set()
 		approvationGroup = packet.action.approvationGroup
 
-		def invalidPacket():
-			print(f'Game Packet invalid arrived from {socket} was ignored.')
-			return float('inf')
-
 		if approvationGroup == ActionGroup.ALL_NETWORK:
 			totalNeeded = len(self._network.allNetwork) // 2 + 1
 			fullGroup = {socket for socket in self._network.allNetwork.values()}
 
 		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
-			if packet.params[ActionParam.ROOM_ID] not in self._rooms:
-				totalNeeded = invalidPacket()
-			else:
-				roomPlayers = self._rooms[packet.params[ActionParam.ROOM_ID]].players
-				totalNeeded = len(roomPlayers) // 2 + 1
-				fullGroup = {socket for socket in roomPlayers.values()}
+			roomPlayers = self._rooms[packet.params[ActionParam.ROOM_ID]].players
+			totalNeeded = len(roomPlayers) // 2 + 1
+			fullGroup = {socket for socket in roomPlayers.values()}
 
 		elif approvationGroup == ActionGroup.NONE:
 			totalNeeded = 2

@@ -76,9 +76,8 @@ class Packet:
                     raise InvalidActionParams
 
             if packetType == PacketType.RESPONSE:
-                approved = headers['APPROVED'] == 'True'
                 actionError = ActionError.getByCode(int(headers['ERROR-CODE']))
-                packet = PacketResponse(action, approved, actionError, content, uuid=uuid)
+                packet = PacketResponse(action, actionError, content, uuid=uuid)
 
         except NotImplementedError:
             raise InvalidPacketError
@@ -106,24 +105,30 @@ class PacketRequest(Packet):
         return base + '\r\n'
 
 class PacketResponse(Packet):
-    def __init__(self, action, approved, actionError=ActionError.NONE, content=None, uuid=None):
+    def __init__(self, action, actionError=ActionError.NONE, content=None, uuid=None):
         super().__init__(PacketType.RESPONSE, action, uuid)
-        self.approved = str(bool(approved))
         self.actionError = actionError
         self.content = content
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({repr(self.uuid)}, {repr(self.action)}, {self.approved}, {self.actionError})'
+        return f'{self.__class__.__name__}({repr(self.uuid)}, {repr(self.action)}, {repr(self.actionError)})'
 
     def __str__(self):
         base = super().__str__()
-        data = f'APPROVED: {self.approved}\r\n'
-        data += f'ERROR-CODE: {self.actionError.code}\r\n\r\n'
+        data = f'ERROR-CODE: {self.actionError.code}\r\n\r\n'
         if self.content:
             data += f'{json.dumps(self.content)}\r\n\r\n'
         return base + data
+
+    def __hash__(self):
+        return hash(self.__class__.__name__) + hash(self.uuid) + hash(self.actionError)
 
     def __eq__(self, other):
         return (self.uuid == other.uuid and 
                     self.approved == other.approved and 
                     self.actionError == other.actionError)
+
+    @property
+    def approved(self):
+        return self.actionError == ActionError.NONE
+    

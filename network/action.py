@@ -72,6 +72,7 @@ class ActionError(Enum):
 	TIME_IS_UP = (13, 'O tempo da rodada acabou.')
 	PLAYER_NOT_MISSED_ANSWER = (14, 'O jogador não errou a palavra.')
 	PLAYER_CANT_BE_OWNER = (15, 'O jogador não é elegível a dono da sala.')
+	PLAYER_IS_A_OWNER = (16, 'O jogador já é dono de uma sala.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -107,9 +108,14 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].status is RoomStatus.ON_HOLD)
 		else ActionError.GENERIC
 	)
+	PLAYER_IS_NOT_A_OWNER = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (len(rooms) == 0 or 
+			all((socket is not room.owner for room in rooms.values())))
+		else ActionError.PLAYER_IS_A_OWNER
+	)
 	PLAYER_NOT_IN_ROOM = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (len(rooms) == 0 or 
-			all((socket not in room.players for room in rooms.values())))
+			all((socket is not player.socket for room in rooms.values() for player in room.players)))
 		else ActionError.PLAYER_IN_ROOM
 	)
 	PLAYER_INSIDE_ROOM = lambda network, socket, rooms, game, params: (
@@ -162,7 +168,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_NOT_MISSED_ANSWER
 	)
 	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (socket in rooms[[ActionParam.ROOM_ID]].players and 
+		ActionError.NONE if (socket.ip in rooms[[ActionParam.ROOM_ID]].players and 
 		params[ActionParam.SOCKET_IP] in rooms.get(params[ActionParam.ROOM_ID], []).players)
 		else ActionError.PLAYER_NOT_IN_ROOM
 	)
@@ -179,7 +185,7 @@ class ActionCondiction(Enum):
 	)
 	PLAYER_CAN_BE_OWNER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].owner not in network.peers and 
-		rooms[params[ActionParam.ROOM_ID]].players[0] is socket)
+		rooms[params[ActionParam.ROOM_ID]].players[0].socket is socket)
 		else ActionError.PLAYER_CANT_BE_OWNER
 	)
 
@@ -193,7 +199,7 @@ class ActionCondiction(Enum):
 class Action(Enum):
 	CREATE_ROOM = (1, 'Create Room', ActionRw.WRITE, 
 				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, ActionParam.PLAYERS_LIMIT), 
-				   (ActionCondiction.PLAYER_NOT_IN_ROOM,), 
+				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_ROOM), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 
@@ -205,7 +211,7 @@ class Action(Enum):
 	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					   (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_ROOM, 
-					   	ActionCondiction.ROOM_STATUS_IN_WAIT), 
+					   	ActionCondiction.ROOM_STATUS_IN_GAME), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,

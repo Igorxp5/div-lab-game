@@ -1,3 +1,4 @@
+import network.config as CONFIG
 from .game.room import RoomStatus, GamePhase
 
 from enum import Enum
@@ -73,6 +74,7 @@ class ActionError(Enum):
 	PLAYER_NOT_MISSED_ANSWER = (14, 'O jogador não errou a palavra.')
 	PLAYER_CANT_BE_OWNER = (15, 'O jogador não é elegível a dono da sala.')
 	PLAYER_IS_A_OWNER = (16, 'O jogador já é dono de uma sala.')
+	MIN_PLAYERS_TO_START = (17, 'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -112,6 +114,11 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (len(rooms) == 0 or 
 			all((socket is not room.owner for room in rooms.values())))
 		else ActionError.PLAYER_IS_A_OWNER
+	)
+	PLAYER_NAME_IS_VALID = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (
+			not rooms[params[ActionParam.ROOM_ID]].playerNameInRoom(params[ActionParam.PLAYER_NAME])
+		) else  ActionError.PLAYER_NAME_ALREADY_EXIST
 	)
 	PLAYER_NOT_IN_ROOM = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (len(rooms) == 0 or 
@@ -187,6 +194,10 @@ class ActionCondiction(Enum):
 		rooms[params[ActionParam.ROOM_ID]].players[0].socket is socket)
 		else ActionError.PLAYER_CANT_BE_OWNER
 	)
+	CAN_START_GAME = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (len(rooms[params[ActionParam.ROOM_ID]].players) >= CONFIG.MIN_PLAYERS_TO_START)
+		else ActionError.MIN_PLAYERS_TO_START
+	)
 
 	def __repr__(self):
 		return f'{self.__class__.__name__}.{self.name}'
@@ -205,13 +216,13 @@ class Action(Enum):
 	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 
 					  (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_ROOM, 
-					  	ActionCondiction.ROOM_STATUS_IN_WAIT), 
+					  	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.PLAYER_NAME_IS_VALID), 
 					  ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					   (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_ROOM, 
-					   	ActionCondiction.ROOM_STATUS_IN_GAME), 
+					   	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.PLAYER_NAME_IS_VALID), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
@@ -274,7 +285,7 @@ class Action(Enum):
 	START_ROOM_GAME = (13, 'Start Room Game', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID,), 
 					   (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_OWNER_ROOM, 
-					   	ActionCondiction.ROOM_STATUS_IN_WAIT), 
+					   	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.CAN_START_GAME), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	INCREMENT_GAME_PHASE = (14, 'Increment Game Phase', ActionRw.WRITE, 

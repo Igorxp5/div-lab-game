@@ -2,6 +2,8 @@ import json
 import time
 import traceback # TODO: Remover no final do projeto
 
+import network.config as CONFIG
+
 from network.network import Network
 from network.packet import PacketRequest, PacketResponse, PacketType, InvalidPacketError
 from network.action import Action, ActionGroup, ActionParam, ActionRw, ActionError
@@ -32,7 +34,18 @@ class SharedGameData(JsonSerializable):
 		self.roundAnswers 		= {}
 		
 		self.roundNumber 		= 0
-		self.phaseTime 			= 0
+
+		self._phaseTimeStart 	= None
+		self._phaseTimeDesired  = 0
+
+	@property
+	def phaseTime(self):
+		return self._phaseTimeDesired - ((datetime.now() - self._phaseTimeStart).seconds)
+
+	@phaseTime.setter
+	def phaseTime(self, countdown):
+		self._phaseTimeDesired = countdown
+		self._phaseTimeStart = datetime.now()
 
 	def _dictKeyProperty(self):
 		return {
@@ -109,6 +122,7 @@ class Game(Thread):
 		self._listenPacketCallbackByAction[Action.GET_LIST_ROOMS].append(self._getListRoomsCallback)
 		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomToPlayCallback)
 		self._listenPacketCallbackByAction[Action.QUIT_ROOM].append(self._quitRoomCallback)
+		self._listenPacketCallbackByAction[Action.START_ROOM_GAME].append(self._startGameCallback)
 
 		self._packetWaitingApprovation = {}
 		self._donePacketHandler = set()
@@ -179,12 +193,28 @@ class Game(Thread):
 
 	def quitRoom(self):
 		if not self._sharedGameData.room:
-			raise RuntimeError('Player not in a room to quit.')
+			raise RuntimeError(1, 'Player not in a room to quit.')
 		params = {
 			ActionParam.ROOM_ID: self._sharedGameData.room.id,
 		}
 		packet = PacketRequest(Action.QUIT_ROOM, params)
 		self._sendPacketRequest(packet)
+
+	def startGame(self):
+		if not self._sharedGameData.room:
+			raise RuntimeError(2, 'Player not in a room to start game.')
+
+		if self._sharedGameData.room.owner is not self.socket:
+			raise RuntimeError(3, 'Player is not room owner to start game.')
+
+		if len(self._sharedGameData.room.players) < CONFIG.MIN_PLAYERS_TO_START:
+			raise RuntimeError(4, 'Room has not min players to start game.')
+
+		params = {
+			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+		}
+		packet = PacketRequest(Action.START_ROOM_GAME, params)
+		self._sendPacketRequest(packet)		
 
 
 	def setListenPacketCallbackByAction(self, action, callback):
@@ -272,6 +302,18 @@ class Game(Thread):
 
 			if len(room.players) == 0:
 				del self._rooms[roomId]
+
+	def _startGameCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			roomId = params[ActionParam.ROOM_ID]
+			room = self._rooms[roomId]
+			if room.isPlayerInRoom(self.socket):
+				self._sharedGameData.room.status = RoomStatus.IN_GAME
+				self._sharedGameData.room.gamePhase = GamePhase.ELECTING_MASTER_ROOM
+				self._sharedGameData.roundNumber = 1
+				self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			print(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
+
 
 	def _sendPacketRequest(self, packet, toSocket=None):
 		self._sendPacket(packet, toSocket)

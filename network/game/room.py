@@ -103,6 +103,12 @@ class Room(JsonSerializable):
     def isPlayerInRoom(self, socket):
         return self.getPlayer(socket) is not None
 
+    def playerNameInRoom(self, playerName):
+        for player in self.players:
+            if player.nickname == playerName:
+                return True
+        return False
+
     def joinPlayer(self, socket, nickname):
         player = Player(nickname, socket, PlayerStatus.ON_HOLD)
         self.players.append(player)

@@ -33,6 +33,9 @@ class Player(JsonSerializable):
         self.socket             = socket
         self.status             = status
 
+    def __repr__(self):
+        return repr(self.toJsonDict())
+
     def setNickname(self, nickname):
         self.nickname = nickname
     
@@ -75,6 +78,9 @@ class PlayerAnswer(JsonSerializable):
     def __init__(self, owner, word):
         self.owner    = owner
         self.word  = word
+
+    def __repr__(self):
+        return repr(self.toJsonDict())
 
     def setElector(self, owner):
         self.owner = owner

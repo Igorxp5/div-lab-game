@@ -1,8 +1,10 @@
+import json
 import time
+import traceback # TODO: Remover no final do projeto
 
 from network.network import Network
 from network.packet import PacketRequest, PacketResponse, PacketType, InvalidPacketError
-from network.action import Action, ActionGroup, ActionParam
+from network.action import Action, ActionGroup, ActionParam, ActionRw
 
 from utils.data_structure import JsonSerializable
 from utils.network_interfaces import getAllIpAddress
@@ -11,7 +13,7 @@ from network.game.room import Room, RoomStatus, GamePhase
 from network.game.player import Player, PlayerStatus, PlayerAnswer
 from network.game.word import Word
 
-from threading import Thread
+from threading import Thread, Event
 from datetime import datetime
 from importlib import reload
 
@@ -98,27 +100,41 @@ class Game(Thread):
 		self._network = Network(self._discoveryAddress, self._tcpAddress)
 		self._network.setListenPacketCallback(self._listenPacketCallback)
 
-		self._rooms = []
-		self._sharedGameData = None
-		self._receiverGroupIps = {}
+		self._rooms = {}
+		self._sharedGameData = SharedGameData()
 
 		# Adicionando callbacks para os tipos de pacotes
 		self._listenPacketCallbackByAction = {action: [] for action in Action}
 		self._listenPacketCallbackByAction[Action.CREATE_ROOM].append(self._createRoomCallback)
+		self._listenPacketCallbackByAction[Action.GET_LIST_ROOMS].append(self._getListRoomsCallback)
 
 		self._packetWaitingApprovation = {}
 
-	def createRoom(self, name, limit):
-		params = {
-			ActionParam.ROOM_NAME: name,
-			ActionParam.PLAYERS_LIMIT: limit
+		self._waitDownloadListRooms = Event()
+
+	@property
+	def _receiverGroupIps(self):
+		receiverGroupIps = {
+			ActionGroup.ROOM_PLAYERS: {},
+			ActionGroup.ROOM_OWNER: {}
 		}
-		packet = PacketRequest(Action.CREATE_ROOM, params)
-		self._sendPacketRequest(packet)
+		if self._sharedGameData.room:
+			receiverGroupIps[ActionGroup.ROOM_PLAYERS] = (
+				{player.soscket.ip: player.socket for player in self._sharedGameData.room.players}
+			)
+			receiverGroupIps[ActionGroup.ROOM_OWNER] = {
+				self._sharedGameData.room.owner.ip: self._sharedGameData.room.owner
+			}
+		return receiverGroupIps
 
 	def run(self):
 		self._network.start()
 		self._network.blockUntilConnectToNetwork()
+
+		if len(self._network.peers) > 0:
+			self._waitDownloadListRooms.set()
+			self.downloadListRooms()
+			self._waitDownloadListRooms.wait()
 
 		while True:
 			input('Tecle Enter para recarregar o Game Controller...\n')
@@ -126,42 +142,86 @@ class Game(Thread):
 				reload(_game_controller_test)
 				_game_controller_test.gameController(self)
 			except Exception as exception:
-				print(exception)
+				traceback.print_exc()
+
+	def downloadListRooms(self):
+		packet = PacketRequest(Action.GET_LIST_ROOMS)
+		socketIp = list(self._network.peers)[0]
+		socket = self._network.peers[socketIp]
+		self._sendPacketRequest(packet, toSocket=socket)
+
+	def createRoom(self, name, limitPlayers):
+		room = Room.createRoom(name, limitPlayers, self._network._socket)
+		params = {
+			ActionParam.ROOM_ID: room.id,
+			ActionParam.ROOM_NAME: room.name,
+			ActionParam.PLAYERS_LIMIT: room.limitPlayers
+		}
+		packet = PacketRequest(Action.CREATE_ROOM, params)
+		self._sendPacketRequest(packet)
 
 	def setListenPacketCallbackByAction(self, action, callback):
-		if not is_instance(action, Action):
+		if not isinstance(action, Action):
 			raise TypeError('action must be a Action Enum.')
 
 		self._listenPacketCallbackByAction[action].append(callback)
 
 	def removeListenPacketCallbackByAction(self, action, callback):
-		if not is_instance(action, Action):
+		if not isinstance(action, Action):
 			raise TypeError('action must be a Action Enum.')
 
 		self._listenPacketCallbackByAction[action].remove(callback)
 
-
 	def _listenPacketCallback(self, socket, packet):
-		self._waiterHandler(socket, packet)
+		if packet.action.rw == ActionRw.READ:
+			self._actionReadPacketCallback(socket, packet)
+
+		elif packet.action.rw == ActionRw.WRITE:
+			self._waiterHandler(socket, packet)
 
 	def _packetApprovedCallback(self, socket, packet):
 		if packet.action in self._listenPacketCallbackByAction:
 			for callback in self._listenPacketCallbackByAction[packet.action]:
 				callback(socket, packet.params)
 
-	def _createRoomCallback(self, socket, params):
-		name = params[ActionParam.ROOM_NAME]
-		limit = params[ActionParam.PLAYERS_LIMIT]
-		print(f'O {socket} criou a sala {repr(name)} (Limite: {limit})')
-			
+	def _actionReadPacketCallback(self, socket, packet):
+		if packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketRequest):
+			content = {id_: room.toJsonDict() for id_, room in self._rooms.items()}
+			packet = PacketResponse(packet.action, True, content, uuid=packet.uuid)
+			self._sendPacket(packet, toSocket=socket)	
+		
+		elif packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketResponse):
+			self._getListRoomsCallback(socket, packet.content)
 
-	def _sendPacketRequest(self, packet):
-		self._sendPacket(packet)
+	def _createRoomCallback(self, socket, params):
+		id_ = params[ActionParam.ROOM_ID]
+		name = params[ActionParam.ROOM_NAME]
+		limitPlayers = params[ActionParam.PLAYERS_LIMIT]
+		room = Room(
+			id_, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
+		)
+		self._rooms[id_] = room
+		print(f'O {socket} criou a sala {repr(name)} (Limite: {limitPlayers})')
+
+	def _getListRoomsCallback(self, socket, content):
+		if content is not None:
+			for id_, room in content.items():
+				roomJsonData = json.dumps(room)
+				sockets = {**self._network.peers, self._network._socket.ip: self._network._socket}
+				self._rooms[id_] = Room.parseJson(roomJsonData, sockets)
+		else:
+			print(f'Não foi possível obter a lista de salas!')
+
+	def _sendPacketRequest(self, packet, toSocket=None):
+		self._sendPacket(packet, toSocket)
 		self._createPacketWaiter(packet)
 		self._savePacketRequestWaiter(self._network.socket, packet)
 
-	def _sendPacket(self, packet):
-		self._network.sendPacket(packet, self._receiverGroupIps)
+	def _sendPacket(self, packet, toSocket=None):
+		if not toSocket:
+			self._network.sendPacket(packet, receiverGroupIps=self._receiverGroupIps)
+		else:
+			self._network.sendPacket(packet, toSocket=toSocket)
 
 	def _createPacketWaiter(self, packet):
 		if packet.uuid not in self._packetWaitingApprovation:
@@ -173,25 +233,26 @@ class Game(Thread):
 				'first_packet_time': datetime.now()
 			}
 
-	def _savePacketRequestWaiter(self, socket, packet):
+	def _savePacketRequestWaiter(self, socket, packet, checkApprovation=True):
 		self._packetWaitingApprovation[packet.uuid]['request_socket'] = socket
 		self._packetWaitingApprovation[packet.uuid]['request_packet'] = packet
 		self._packetWaitingApprovation[packet.uuid]['agreements_list'].append(
 			socket
 		)
 
-	def _waiterHandler(self, socket, packet):
-		if packet.action.approvationGroup == ActionGroup.ONE_PLAYER:
-			self._callback(socket, packet)
-			return
+		if checkApprovation and self._isPacketApproved(packet):
+			requestPacket = self._packetWaitingApprovation[packet.uuid]['request_packet']
+			requestSocket = self._packetWaitingApprovation[packet.uuid]['request_socket']
+			self._packetApprovedCallback(requestSocket, requestPacket)
 
+	def _waiterHandler(self, socket, packet):
 		self._createPacketWaiter(packet)
 
 		packetResponse = None
 		approvationSocket  = None
 		if packet.packetType == PacketType.REQUEST:
 			self._savePacketRequestWaiter(socket, packet)
-			approvation = self._testPacketConditions(socket, packet)
+			approvation = self._testPacketConditions(socket, packet, False)
 			packetResponse = PacketResponse(packet.action, approvation, uuid=packet.uuid)
 			approvationSocket = self._network._socket
 			self._sendPacket(packetResponse)
@@ -207,8 +268,8 @@ class Game(Thread):
 
 		if self._isPacketApproved(packet):
 			requestPacket = self._packetWaitingApprovation[packet.uuid]['request_packet']
-			request_socket = self._packetWaitingApprovation[packet.uuid]['request_socket']
-			self._packetApprovedCallback(request_socket, requestPacket)
+			requestSocket = self._packetWaitingApprovation[packet.uuid]['request_socket']
+			self._packetApprovedCallback(requestSocket, requestPacket)
 
 	def _testPacketConditions(self, socket, packet):
 		for conditions in packet.action.conditions:
@@ -228,8 +289,10 @@ class Game(Thread):
 
 		if approvationGroup == ActionGroup.ALL_NETWORK:
 			totalNeeded = len(self._network.peers) // 2 + 1
-			totalApprovation = len([socket for socket in self._network.peers.values() if socket in agreementsList])
-		
+			totalApprovation = [socket for socket in self._network.peers.values() if socket in agreementsList]
+			totalApprovation += [self._network._socket]
+			totalApprovation = len(totalApprovation)
+
 		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
 			if (not self._sharedGameData.room or 
 					self._sharedGameData.room.id != packet.params[ActionParam.ROOM_ID]):
@@ -239,9 +302,9 @@ class Game(Thread):
 				totalNeeded = len(roomPlayers) // 2 + 1
 				totalApprovation = len([player for player in self._network.peers.values() if player.socket in agreementsList])
 		
-		elif approvationGroup == ActionGroup.ONE_PLAYER:
-			totalNeeded = 1
-			totalApprovation = 1 if packet.params[ActionParam.SOCKET_IP] in agreementsList else 0
+		elif approvationGroup == ActionGroup.NONE:
+			totalNeeded = 2
+			totalApprovation = len(agreementsList)
 
 		elif approvationGroup == ActionGroup.ROOM_OWNER:
 			if (not self._sharedGameData.room or 

@@ -1,48 +1,18 @@
 import json
 
-class IdTable:
-	def __init__(self, get_id=None):
-		self._data = {}
-		self._sort_id = []
-		self._size = 0
-		if get_id is None:
-			self._get_id = lambda item: item.id
-
-	def __contains__(self, id_):
-		return self._data in id_
-
-	def __iter__(self):
-		return iter((self._data[id_] for id_ in self._sort_id))
-
-	def add(self, value):
-		id_ = self._get_id(value)
-		self._data[id_] = value
-		self._sort_id[self._size]
-		self._size += 1
-
-	def get(self, id_):
-		return self._data[id_]
-
-	def index(self, id_):
-		return self._sort_id.index(id_)
-
-	def remove(self, id_):
-		del self._data[id_]
-		self._sort_id.remove(id_)
-		self._size -= 1
 
 class JsonSerializable:
 	def toJson(self, *args, **kwargs):
 		return json.dumps(
-			self._toJsonDict(), default=JsonSerializable._defaultSerialize, *args, **kwargs
+			self.toJsonDict(), default=JsonSerializable._defaultSerialize, *args, **kwargs
 		)
 
-	def _toJsonDict(self):
+	def toJsonDict(self):
 		try:
 			keyProperty = self._dictKeyProperty().items()
 			return {key: JsonSerializable._propertyToJsonDict(value) for key, value in keyProperty}
 		except NotImplementedError:
-			return self
+			return JsonSerializable._defaultSerialize(self)
 
 	def _dictKeyProperty(self):
 		raise NotImplementedError
@@ -61,7 +31,10 @@ class JsonSerializable:
 
 	@staticmethod
 	def _defaultSerialize(obj):
-		return obj._basicValue()
+		try:
+			return obj._basicValue()
+		except NotImplementedError:
+			return self
 
 	@staticmethod
 	def _propertyToJsonDict(property_):
@@ -75,7 +48,7 @@ class JsonSerializable:
 			return result
 		
 		elif isinstance(property_, JsonSerializable):
-			return property_._toJsonDict()
+			return property_.toJsonDict()
 		elif (isinstance(property_, bool) or 
 				isinstance(property_, str) or 
 				isinstance(property_, int) or

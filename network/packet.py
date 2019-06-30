@@ -47,16 +47,16 @@ class Packet:
     def parse(data):
         packet = None
 
-        message = data.decode(Packet.ENCODING)
-        headers_content = message.split('\r\n\r\n')
-        headers_lines = headers_content[0].split('\r\n')
-        headers = headers_lines[1:]
-        headers = [header for header in headers if header]
-        headers = [header.split(': ') for header in headers]
-        headers = {header: value for header, value in headers}
-        packetType = PacketType.getByValue(headers_lines[0])
-
         try:
+            message = data.decode(Packet.ENCODING)
+            headers_content = message.split('\r\n\r\n')
+            headers_lines = headers_content[0].split('\r\n')
+            headers = headers_lines[1:]
+            headers = [header for header in headers if header]
+            headers = [header.split(': ') for header in headers]
+            headers = {header: value for header, value in headers}
+            packetType = PacketType.getByValue(headers_lines[0])
+
             action = Action.getById(int(headers['ACTION-ID']))
 
             uuid = headers['REQUEST-UUID']
@@ -64,10 +64,11 @@ class Packet:
             content = None
             if headers_content[1]:
                 content = json.loads(headers_content[1])
-                content = {ActionParam.getByValue(key): value for key, value in content.items()}
-                content = {key: key(value) for key, value in content.items()}
             
             if packetType == PacketType.REQUEST:
+                content = {ActionParam.getByValue(key): value for key, value in content.items()}
+                content = {key: key(value) for key, value in content.items()}
+
                 packet = PacketRequest(action, content, uuid=uuid)
 
                 if not all([param in content for param in action.params]):

@@ -49,6 +49,9 @@ class Room(JsonSerializable):
         self.players        = players
         self.status         = status
 
+    def __repr__(self):
+        return repr(self.toJsonDict())
+
     def setId(self, id):
         self.id = id
 

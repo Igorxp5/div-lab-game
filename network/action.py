@@ -6,11 +6,17 @@ class InvalidActionParams(RuntimeError):
 	def __init__(self, message=''):
 		super().__init__(message)
 
+
 class ActionGroup(Enum):
-	ALL_NETWORK = 0
-	ROOM_PLAYERS = 1
-	ONE_PLAYER = 2
+	NONE = 0
+	ALL_NETWORK = 1
+	ROOM_PLAYERS = 2
 	ROOM_OWNER = 3
+
+
+class ActionRw(Enum):
+	READ = 'r'
+	WRITE = 'w'
 
 
 class ActionParam(Enum):
@@ -110,100 +116,100 @@ class ActionCondiction(Enum):
 
 
 class Action(Enum):
-	CREATE_ROOM = (1, 'Create Room', 'w', 
+	CREATE_ROOM = (1, 'Create Room', ActionRw.WRITE, 
 				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, ActionParam.PLAYERS_LIMIT), 
 				   (ActionCondiction.PLAYER_NOT_IN_ROOM,), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
-	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', 'w', 
+	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 
 					  (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					  (ActionCondiction.PLAYER_NOT_IN_ROOM, ActionCondiction.ROOM_STATUS_IN_WAIT), 
 					  ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
-	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', 'w', 
+	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					   (ActionCondiction.PLAYER_NOT_IN_ROOM, ActionCondiction.ROOM_STATUS_IN_WAIT), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
-	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', 'w',
+	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
 						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING), 
 						 (ActionCondiction.PLAYER_IS_MASTER_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 						 	ActionCondiction.TIME_NOT_IS_UP), 
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	CONTEST_WORD = (5, 'Contest Word', 'w', 
+	CONTEST_WORD = (5, 'Contest Word', ActionRw.WRITE, 
 					(ActionParam.ROOM_ID,),
 					(ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 						ActionCondiction.GAME_IS_WAITING_CONTESTS, ActionCondiction.TIME_NOT_IS_UP,
 						ActionCondiction.PLAYER_MISSED_ANSWER), 
 					ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 	
-	QUIT_ROOM = (6, 'Quit Room', 'w', 
+	QUIT_ROOM = (6, 'Quit Room', ActionRw.WRITE, 
 				 (ActionParam.ROOM_ID,), 
 				 (ActionCondiction.PLAYER_INSIDE_ROOM,), 
 				 ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
-	CHOOSE_VOTE_ELECTION_ROUND_MASTER = (7, 'Choose Vote Election Round Master', 'w', 
+	CHOOSE_VOTE_ELECTION_ROUND_MASTER = (7, 'Choose Vote Election Round Master', ActionRw.WRITE, 
 										 (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 										 (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 										 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, ActionCondiction.GAME_IS_ELECTING_MASTER_ROOM,
 										 	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.CHOSEN_PLAYER_IS_NOT_MASTER_ROOM), 
 										 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	SEND_PLAYER_ANSWER = (8, 'Send Player Answer', 'w', 
+	SEND_PLAYER_ANSWER = (8, 'Send Player Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION), 
 						  (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 						  	ActionCondiction.GAME_IS_WAITING_ANSWERS, ActionCondiction.TIME_NOT_IS_UP,
 						  	ActionCondiction.PLAYER_IS_NOT_MASTER_ROOM), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', 'w', 
+	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', ActionRw.WRITE, 
 								  (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 								  (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 								 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, ActionCondiction.GAME_IS_ELECTING_CORRECT_ANSWER,
 								 	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM), 
 								  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	GET_DATA_TABLE = (10, 'Get Data Table', 'r', 
+	GET_LIST_ROOMS = (10, 'Get List Rooms', ActionRw.READ, 
 					  tuple(), 
 					  tuple(), 
-					  ActionGroup.ONE_PLAYER, ActionGroup.ONE_PLAYER)
+					  ActionGroup.NONE, ActionGroup.NONE)
 
-	GET_ROOM_DATA_TABLE = (11, 'Get Room Data Table', 'r', 
+	GET_ROOM_DATA_TABLE = (11, 'Get Room Data Table', ActionRw.READ, 
 						   (ActionParam.ROOM_ID,), 
 						   tuple(), 
 						   ActionGroup.ROOM_OWNER, ActionGroup.ROOM_OWNER)
 
-	KICK_PLAYER_ROOM = (12, 'Kick Player of Room', 'w', 
+	KICK_PLAYER_ROOM = (12, 'Kick Player of Room', ActionRw.WRITE, 
 						(ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 						(ActionCondiction.PLAYER_IS_OWNER_ROOM, ActionCondiction.ROOM_STATUS_IN_WAIT,
 						 	ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM), 
 						ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
-	START_ROOM_GAME = (13, 'Start Room Game', 'w', 
+	START_ROOM_GAME = (13, 'Start Room Game', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID,), 
 					   (ActionCondiction.PLAYER_IS_OWNER_ROOM, ActionCondiction.ROOM_STATUS_IN_WAIT), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
-	INCREMENT_GAME_PHASE = (14, 'Increment Game Phase', 'w', 
+	INCREMENT_GAME_PHASE = (14, 'Increment Game Phase', ActionRw.WRITE, 
 							(ActionParam.ROOM_ID,), 
 							(ActionCondiction.PLAYER_IS_OWNER_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 								ActionCondiction.TIME_IS_UP), 
 							ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	INCREMENT_GAME_ROUND = (15, 'Increment Game Round', 'w', 
+	INCREMENT_GAME_ROUND = (15, 'Increment Game Round', ActionRw.WRITE, 
 							(ActionParam.ROOM_ID,), 
 							(ActionCondiction.PLAYER_IS_OWNER_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 								ActionCondiction.GAME_IS_RESULT_ROUND, ActionCondiction.TIME_IS_UP),
 							ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
-	BE_ROOM_OWNER = (16, 'Be Room Owner', 'w', 
+	BE_ROOM_OWNER = (16, 'Be Room Owner', ActionRw.WRITE, 
 					 (ActionParam.ROOM_ID,), 
 					 (ActionCondiction.PLAYER_INSIDE_ROOM, ActionCondiction.ROOM_STATUS_IN_GAME,
 						ActionCondiction.PLAYER_CAN_BE_OWNER), 
 					 ActionGroup.ALL_NETWORK, ActionGroup.ROOM_PLAYERS)
 
-	SEND_MASTER_ANSWER = (17, 'Send Master Answer', 'w', 
+	SEND_MASTER_ANSWER = (17, 'Send Master Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION),
 						  (ActionCondiction.PLAYER_IS_MASTER_ROOM, ActionCondiction.GAME_IS_WAITING_ANSWERS, 
 						  	ActionCondiction.TIME_IS_UP), 

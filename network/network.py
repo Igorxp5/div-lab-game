@@ -5,7 +5,7 @@ from .action import ActionGroup, InvalidActionParams
 from .discovery_service import DiscoveryService
 from .packet import Packet, PacketRequest, PacketResponse, PacketType, InvalidPacketError
 
-from threading import Thread, Event, Lock
+from threading import Thread, Event, Lock, current_thread
 
 class Network(Thread):
 	MAX_LISTEN = 30
@@ -22,14 +22,13 @@ class Network(Thread):
 
 		self._socket = Socket(self._tcpAddress[0], self._tcpAddress[1], self._tcpServer)
 
-		self._blockUntilConnectToNetwork = Lock()
+		self._connectingPeerThreads = []
+		self._blockUntilConnectToNetwork = Event()
 
 		self._connections = {}
 		self._listenThreads = {}
 
 		self._listenPacketCallback = None
-
-		self._blockUntilConnectToNetwork.acquire()
 
 	@property
 	def socket(self):
@@ -49,23 +48,40 @@ class Network(Thread):
 		self._listenPacketCallback = listenCallback
 
 	def blockUntilConnectToNetwork(self):
-		self._blockUntilConnectToNetwork.acquire()
-		self._blockUntilConnectToNetwork.release()
+		self._blockUntilConnectToNetwork.wait()
 
-	def sendPacket(self, packet, receiverGroupIps):
-		if packet.action.receiverGroup == ActionGroup.ALL_NETWORK:
-			for ip, socket in self._connections.items():
-				Thread(target=self._sendPacketToPeer, args=(socket, packet), daemon=True).start()
+	def sendPacket(self, packet, toSocket=None, receiverGroupIps=tuple()):
+		destination = []
+
+		if toSocket:
+			destination.append(toSocket)
+
 		else:
-			for ip, socket in receiverGroupIps[packet.action.receiverGroup].items():
-				Thread(target=self._sendPacketToPeer, args=(socket, packet), daemon=True).start()
+			if packet.action.receiverGroup == ActionGroup.ALL_NETWORK:
+				for ip, socket in self._connections.items():
+					destination.append(socket)
+			else:
+				group = receiverGroupIps.get(packet.action.receiverGroup, {})
+				for ip, socket in group.items():
+					destination.append(socket)
+
+		for socket in destination:
+			Thread(target=self._sendPacketToPeer, args=(socket, packet), daemon=True).start()		
+
+		return len(destination)
+
 
 	def _discoveryAndConnectPeers(self):
 		addresses = self._discoveryService.discover(Network.DISCOVERY_TIMEOUT)
 		print(f'Descoberto {len(addresses)} endereços IP. Tentando contactá-los...')
+		self._connectingPeerThreads = [None] * len(addresses)
 		for address in addresses:
-			Thread(target=self._connectToPeer, args=(address,), daemon=True).start()
-		self._blockUntilConnectToNetwork.release()
+			thread = Thread(target=self._connectToPeer, args=(address,), daemon=True)
+			thread.start()
+			self._connectingPeerThreads.append(thread)
+		
+		if len(addresses) == 0:
+			self._blockUntilConnectToNetwork.set()
 
 	def _connectToPeer(self, address):
 		tcpClient = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
@@ -78,8 +94,17 @@ class Network(Thread):
 			thread = Thread(target=self._listenConnection, args=(self._connections[ip],), daemon=True)
 			self._listenThreads[ip] = thread
 			thread.start()
+
+			if not self._blockUntilConnectToNetwork.is_set():
+				self._blockUntilConnectToNetwork.set()
 		except TimeoutError:
 			print(f'Não foi possível conectar-se a {address}')
+
+			if (any([not t.is_alive() for t in self._connectingPeerThreads if t]) and
+					len(self._connections) > 0) and self._blockUntilConnectToNetwork.is_set():
+				self._blockUntilConnectToNetwork.set()
+
+		self._connectingPeerThreads.remove(current_thread())
 
 	def _bindTcpServer(self):
 		self._tcpServer.bind(self._tcpAddress)
@@ -110,6 +135,7 @@ class Network(Thread):
 
 				if self._listenPacketCallback:
 					self._listenPacketCallback(socket, packet)
+
 			except InvalidPacketError:
 				print(f'Invalid Packet arrived from {socket} was ignored.')
 			except InvalidActionParams:

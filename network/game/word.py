@@ -10,6 +10,9 @@ class Word(JsonSerializable):
         self.syllables  = syllables
         self.hashSyllables = hashSyllables
 
+    def __repr__(self):
+        return repr(self.toJsonDict())
+
     def setWordStr(self, wordStr):
         self.wordStr = wordStr
 

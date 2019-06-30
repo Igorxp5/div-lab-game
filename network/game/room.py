@@ -3,7 +3,7 @@ import uuid
 
 from enum import Enum
 
-from .player import Player
+from .player import Player, PlayerStatus
 
 from utils.data_structure import JsonSerializable
 
@@ -93,6 +93,24 @@ class Room(JsonSerializable):
     
     def getStatus(self):
         return self.status
+
+    def getPlayer(self, socket):
+        for player in self.players:
+            if player.socket is socket:
+                return player
+        return None
+
+    def isPlayerInRoom(self, socket):
+        return self.getPlayer(socket) is not None
+
+    def joinPlayer(self, socket, nickname):
+        player = Player(nickname, socket, PlayerStatus.ON_HOLD)
+        self.players.append(player)
+        return player
+
+    def removePlayer(self, socket):
+        player = [p for p in self.players if p.socket is socket][0]
+        self.players.remove(player)
 
     def _dictKeyProperty(self):
         return {

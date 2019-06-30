@@ -119,7 +119,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_IN_ROOM
 	)
 	PLAYER_INSIDE_ROOM = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (socket in rooms[params[ActionParam.ROOM_ID]].players or 
+		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].isPlayerInRoom(socket) or 
 			rooms[params[ActionParam.ROOM_ID]].owner is socket)
 		else ActionError.PLAYER_NOT_IN_ROOM
 	)
@@ -168,8 +168,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_NOT_MISSED_ANSWER
 	)
 	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (socket.ip in rooms[[ActionParam.ROOM_ID]].players and 
-		params[ActionParam.SOCKET_IP] in rooms.get(params[ActionParam.ROOM_ID], []).players)
+		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].isPlayerInRoom(params[ActionParam.SOCKET_IP]))
 		else ActionError.PLAYER_NOT_IN_ROOM
 	)
 	CHOSEN_PLAYER_IS_NOT_ROOM_MASTER = lambda network, socket, rooms, game, params: (
@@ -198,7 +197,8 @@ class ActionCondiction(Enum):
 
 class Action(Enum):
 	CREATE_ROOM = (1, 'Create Room', ActionRw.WRITE, 
-				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, ActionParam.PLAYERS_LIMIT), 
+				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, 
+				   	ActionParam.PLAYERS_LIMIT, ActionParam.PLAYER_NAME), 
 				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_ROOM), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 

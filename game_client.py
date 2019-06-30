@@ -108,6 +108,7 @@ class Game(Thread):
 		self._listenPacketCallbackByAction[Action.CREATE_ROOM].append(self._createRoomCallback)
 		self._listenPacketCallbackByAction[Action.GET_LIST_ROOMS].append(self._getListRoomsCallback)
 		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomToPlayCallback)
+		self._listenPacketCallbackByAction[Action.QUIT_ROOM].append(self._quitRoomCallback)
 
 		self._packetWaitingApprovation = {}
 		self._donePacketHandler = set()
@@ -122,12 +123,16 @@ class Game(Thread):
 		}
 		if self._sharedGameData.room:
 			receiverGroupIps[ActionGroup.ROOM_PLAYERS] = (
-				{player.soscket.ip: player.socket for player in self._sharedGameData.room.players}
+				{player.socket.ip: player.socket for player in self._sharedGameData.room.players}
 			)
 			receiverGroupIps[ActionGroup.ROOM_OWNER] = {
 				self._sharedGameData.room.owner.ip: self._sharedGameData.room.owner
 			}
 		return receiverGroupIps
+
+	@property
+	def socket(self):
+		return self._network.socket
 
 	def run(self):
 		self._network.start()
@@ -152,12 +157,13 @@ class Game(Thread):
 		socket = self._network.peers[socketIp]
 		self._sendPacketRequest(packet, toSocket=socket)
 
-	def createRoom(self, name, limitPlayers):
-		room = Room.createRoom(name, limitPlayers, self._network.socket)
+	def createRoom(self, name, limitPlayers, playerName):
+		room = Room.createRoom(name, limitPlayers, self.socket)
 		params = {
 			ActionParam.ROOM_ID: room.id,
 			ActionParam.ROOM_NAME: room.name,
-			ActionParam.PLAYERS_LIMIT: room.limitPlayers
+			ActionParam.PLAYERS_LIMIT: room.limitPlayers,
+			ActionParam.PLAYER_NAME: playerName
 		}
 		packet = PacketRequest(Action.CREATE_ROOM, params)
 		self._sendPacketRequest(packet)
@@ -169,6 +175,15 @@ class Game(Thread):
 			ActionParam.PLAYER_NAME: playerName
 		}
 		packet = PacketRequest(Action.JOIN_ROOM_PLAY, params)
+		self._sendPacketRequest(packet)
+
+	def quitRoom(self):
+		if not self._sharedGameData.room:
+			raise RuntimeError('Player not in a room to quit.')
+		params = {
+			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+		}
+		packet = PacketRequest(Action.QUIT_ROOM, params)
 		self._sendPacketRequest(packet)
 
 
@@ -200,6 +215,9 @@ class Game(Thread):
 			for callback in self._listenPacketCallbackByAction[packet.action]:
 				callback(socket, packet.params, actionError)
 
+		if actionError != ActionError.NONE:
+			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
+
 	def _actionReadPacketCallback(self, socket, packet):
 		if packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketRequest):
 			content = {id_: room.toJsonDict() for id_, room in self._rooms.items()}
@@ -220,13 +238,16 @@ class Game(Thread):
 			id_ = params[ActionParam.ROOM_ID]
 			name = params[ActionParam.ROOM_NAME]
 			limitPlayers = params[ActionParam.PLAYERS_LIMIT]
+			playerName = params[ActionParam.PLAYER_NAME]
 			room = Room(
 				id_, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
 			)
+			room.joinPlayer(socket, playerName)
 			self._rooms[id_] = room
-			print(f'O {socket} criou a sala {repr(name)} (Limite: {limitPlayers})')
-		else:
-			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
+			print(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers})')
+
+			if socket is self.socket:
+				self._sharedGameData.room = room
 
 	def _joinRoomToPlayCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -234,14 +255,28 @@ class Game(Thread):
 			playerName = params[ActionParam.PLAYER_NAME]
 			player = Player(playerName, socket, PlayerStatus.ON_HOLD)
 			self._rooms[roomId].players.append(player)
+			self._sharedGameData.room = self._rooms[roomId]
 			print(f'O {socket} entrou na sala \'{self._rooms[roomId].name}\' como \'{playerName}\'')
-		else:
-			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
+
+	def _quitRoomCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			roomId = params[ActionParam.ROOM_ID]
+			room = self._rooms[roomId]
+			player = room.getPlayer(socket)
+			room.removePlayer(socket)
+
+			print(f'O jogador {player.nickname} saiu da sala \'{room.name}\'.')
+
+			if self._sharedGameData.room and self._sharedGameData.room.id == roomId:
+				self._sharedGameData.room = None
+
+			if len(room.players) == 0:
+				del self._rooms[roomId]
 
 	def _sendPacketRequest(self, packet, toSocket=None):
 		self._sendPacket(packet, toSocket)
 		self._createPacketWaiter(packet)
-		self._savePacketRequestWaiter(self._network.socket, packet)
+		self._savePacketRequestWaiter(self.socket, packet)
 
 	def _sendPacket(self, packet, toSocket=None):
 		if not toSocket:
@@ -290,7 +325,7 @@ class Game(Thread):
 
 			self._savePacketRequestWaiter(socket, packet)
 
-			if self._isSocketInApprovationGroup(self._network.socket, packet):
+			if self._isSocketInApprovationGroup(self.socket, packet):
 				actionError = self._testPacketConditions(socket, packet)
 				packetResponse = PacketResponse(packet.action, actionError, uuid=packet.uuid)
 				self._sendPacket(packetResponse)

@@ -10,6 +10,7 @@ from network.action import Action, ActionGroup, ActionParam, ActionRw, ActionErr
 
 from utils.data_structure import JsonSerializable
 from utils.network_interfaces import getAllIpAddress
+from utils.countdown import Countdown
 
 from network.game.room import Room, RoomStatus, GamePhase
 from network.game.player import Player, PlayerStatus, PlayerAnswer
@@ -21,22 +22,29 @@ from importlib import reload
 
 import _game_controller_test
 
+class GameActionError(RuntimeError):
+	def __init__(self, actionError):
+		self.actionError = actionError
+		super().__init__(actionError.message)
+
 class SharedGameData(JsonSerializable):
 	def __init__(self):
-		self.room 				= None
-		self.roomMaster 		= None
-		self.roundWord 			= None
-		self.gamePhase 			= None
+		self.room 					= None
+		self.roundMaster 			= None
+		self.roundWord 				= None
+		self.gamePhase 				= None
 
-		self.chosenWords 		= []
-		self.masterRoomVotes 	= {}
-		self.contestAnswerVotes = {}
-		self.roundAnswers 		= {}
+		self.chosenWords 			= []
+		self.masterRoomVotes 		= {}
+		self.electingOut 	= {}
+		self.contestAnswerVotes 	= {}
+		self.roundAnswers 			= {}
 		
-		self.roundNumber 		= 0
+		self.roundNumber 			= 0
+		self._phaseTimeStart 		= None
+		self._phaseTimeDesired  	= 0
 
-		self._phaseTimeStart 	= None
-		self._phaseTimeDesired  = 0
+		self._changingGamePhaseCallback = None
 
 	@property
 	def phaseTime(self):
@@ -47,13 +55,22 @@ class SharedGameData(JsonSerializable):
 		self._phaseTimeDesired = countdown
 		self._phaseTimeStart = datetime.now()
 
+	def setGamePhase(self, gamePhase):
+		self.gamePhase = gamePhase
+		if self._changingGamePhaseCallback:
+			Thread(target=self._changingGamePhaseCallback, args=(gamePhase,)).start()
+
+	def setChangingGamePhaseCallback(self, callback):
+		self._changingGamePhaseCallback = callback		
+
 	def _dictKeyProperty(self):
 		return {
 			'room': self.room,
-			'roomMaster': self.roomMaster,
+			'roundMaster': self.roundMaster,
 			'roundWord': self.roundWord,
 			'gamePhase': self.gamePhase,
 			'chosenWords': self.chosenWords,
+			'electingOut': self.electingOut,
 			'masterRoomVotes': {ip: votePlayer.socket for ip, votePlayer in self.masterRoomVotes.items()},
 			'contestAnswerVotes': {ip: votePlayer.socket for ip, votePlayer in self.contestAnswerVotes.items()},
 			'roundAnswers': self.roundAnswers,
@@ -68,13 +85,20 @@ class SharedGameData(JsonSerializable):
 		roomJsonData = json.dumps(jsonDict['room'])
 		sharedGameData.room = Room.parseJson(roomJsonData, sockets)
 
-		roomMasterJsonData = json.dumps(jsonDict['roomMaster'])
-		sharedGameData.roomMaster = Player.parseJson(roomMasterJsonData, sockets)
+		roundMasterJsonData = json.dumps(jsonDict['roundMaster'])
+		sharedGameData.roundMaster = Player.parseJson(roundMasterJsonData, sockets)
 
 		roundWordJsonData = json.dumps(jsonDict['roundWord'])
 		sharedGameData.roundWord = Word.parseJson(roundWordJsonData)
 
 		sharedGameData.gamePhase = GamePhase.getByValue(jsonDict['gamePhase'])
+
+		for ip, playerDict in jsonDict['electingOut']:
+			playerJsonData = json.dumps(playerDict)
+			player = Player.parseJson(
+				playerAnswerJsonData, self._network.allNetwork
+			)
+			sharedGameData.electingOut[ip] = player
 
 		for wordDict in jsonDict['chosenWords']:
 			wordJsonData = json.dumps(wordDict)
@@ -101,8 +125,8 @@ class SharedGameData(JsonSerializable):
 
 
 class Game(Thread):
-	DISCOVERY_PORT = 8400
-	TCP_SERVER_PORT = 8401
+	DISCOVERY_PORT = CONFIG.DISCOVERY_PORT
+	TCP_SERVER_PORT = CONFIG.TCP_SERVER_PORT
 	PACKET_WAITING_APPROVATION_QUEUE_SIZE = 30
 
 	def __init__(self, address):
@@ -118,11 +142,9 @@ class Game(Thread):
 
 		# Adicionando callbacks para os tipos de pacotes
 		self._listenPacketCallbackByAction = {action: [] for action in Action}
-		self._listenPacketCallbackByAction[Action.CREATE_ROOM].append(self._createRoomCallback)
-		self._listenPacketCallbackByAction[Action.GET_LIST_ROOMS].append(self._getListRoomsCallback)
-		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomToPlayCallback)
-		self._listenPacketCallbackByAction[Action.QUIT_ROOM].append(self._quitRoomCallback)
-		self._listenPacketCallbackByAction[Action.START_ROOM_GAME].append(self._startGameCallback)
+		self._listenChangingGamePhaseCallback = None
+		self._registerDefaultListenCallbacks()
+		self._sharedGameData.setChangingGamePhaseCallback(self._changingGamePhaseCallback)
 
 		self._packetWaitingApprovation = {}
 		self._donePacketHandler = set()
@@ -193,7 +215,7 @@ class Game(Thread):
 
 	def quitRoom(self):
 		if not self._sharedGameData.room:
-			raise RuntimeError(1, 'Player not in a room to quit.')
+			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
 		params = {
 			ActionParam.ROOM_ID: self._sharedGameData.room.id,
 		}
@@ -202,20 +224,60 @@ class Game(Thread):
 
 	def startGame(self):
 		if not self._sharedGameData.room:
-			raise RuntimeError(2, 'Player not in a room to start game.')
+			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
 
 		if self._sharedGameData.room.owner is not self.socket:
-			raise RuntimeError(3, 'Player is not room owner to start game.')
+			raise GameActionError(ActionError.PLAYER_IS_NOT_OWNER)
 
 		if len(self._sharedGameData.room.players) < CONFIG.MIN_PLAYERS_TO_START:
-			raise RuntimeError(4, 'Room has not min players to start game.')
+			raise GameActionError(ActionError.MIN_PLAYERS_TO_START)
 
 		params = {
 			ActionParam.ROOM_ID: self._sharedGameData.room.id,
 		}
 		packet = PacketRequest(Action.START_ROOM_GAME, params)
-		self._sendPacketRequest(packet)		
+		self._sendPacketRequest(packet)
 
+	def voteRoomMaster(self, voteSocket):
+		if not self._sharedGameData.room:
+			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
+
+		if self._sharedGameData.gamePhase != GamePhase.ELECTING_ROUND_MASTER:
+			raise GameActionError(ActionError.GAME_NOT_ELECTING_ROUND_MASTER)
+
+		if not self._sharedGameData.room.isPlayerInRoom(voteSocket):
+			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
+
+		if self._sharedGameData.phaseTime <= CONFIG.END_PHASE_TIME:
+			raise GameActionError(ActionError.TIME_IS_UP)
+
+		if not self._sharedGameData.room.isPlayerInRoom(voteSocket):
+			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
+
+		if self._sharedGameData.roundMaster and self._sharedGameData.roundMaster.socket == voteSocket:
+			raise GameActionError(ActionError.PLAYER_WAS_ROUND_MASTER)
+
+		if voteSocket in self._sharedGameData.electingOut:
+			raise GameActionError(ActionError.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING)
+
+		params = {
+			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+			ActionParam.SOCKET_IP: voteSocket.ip,
+		}
+		packet = PacketRequest(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
+		self._sendPacketRequest(packet)
+
+	def getSocket(self, ip):
+		return self._network.allNetwork.get(ip, None)
+
+	def getRoom(self, roomId):
+		return self._rooms.get(roomId, None)
+
+	def getCurrentRoom(self):
+		return self._sharedGameData.room
+
+	def isRoomMaster(self):
+		return self._sharedGameData.room and self._sharedGameData.room.owner is self.socket
 
 	def setListenPacketCallbackByAction(self, action, callback):
 		if not isinstance(action, Action):
@@ -228,6 +290,24 @@ class Game(Thread):
 			raise TypeError('action must be a Action Enum.')
 
 		self._listenPacketCallbackByAction[action].remove(callback)
+
+	def setChangingGamePhaseCallback(self, callback):
+		self._listenChangingGamePhaseCallback = callback
+
+	def removeChangingGamePhaseCallback(self):
+		self._listenChangingGamePhaseCallback = None
+
+	def _registerDefaultListenCallbacks(self):
+		defaultListPacketCallbacks = {
+			Action.GET_LIST_ROOMS: self._getListRoomsCallback,
+			Action.CREATE_ROOM: self._createRoomCallback,
+			Action.JOIN_ROOM_PLAY: self._joinRoomToPlayCallback,
+			Action.QUIT_ROOM: self._quitRoomCallback,
+			Action.START_ROOM_GAME: self._startGameCallback,
+			Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER: self._chooseVoteElectionRoundMasterCallback,
+		}
+		for action, callback in defaultListPacketCallbacks.items():
+			self._listenPacketCallbackByAction[action].append(callback)
 
 	def _listenPacketCallback(self, socket, packet):
 		if packet.action.rw == ActionRw.READ:
@@ -265,33 +345,32 @@ class Game(Thread):
 
 	def _createRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
-			id_ = params[ActionParam.ROOM_ID]
+			roomId = params[ActionParam.ROOM_ID]
 			name = params[ActionParam.ROOM_NAME]
 			limitPlayers = params[ActionParam.PLAYERS_LIMIT]
 			playerName = params[ActionParam.PLAYER_NAME]
 			room = Room(
-				id_, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
+				roomId, name, limitPlayers, socket, [], RoomStatus.ON_HOLD
 			)
 			room.joinPlayer(socket, playerName)
-			self._rooms[id_] = room
-			print(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers})')
+			self._rooms[roomId] = room
+			print(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers}). ({repr(roomId)})')
 
 			if socket is self.socket:
 				self._sharedGameData.room = room
 
 	def _joinRoomToPlayCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
-			roomId = params[ActionParam.ROOM_ID]
+			room = self.getRoom(params[ActionParam.ROOM_ID])
 			playerName = params[ActionParam.PLAYER_NAME]
 			player = Player(playerName, socket, PlayerStatus.ON_HOLD)
-			self._rooms[roomId].players.append(player)
-			self._sharedGameData.room = self._rooms[roomId]
-			print(f'O {socket} entrou na sala \'{self._rooms[roomId].name}\' como \'{playerName}\'')
+			room.players.append(player)
+			self._sharedGameData.room = room
+			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\'.')
 
 	def _quitRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
-			roomId = params[ActionParam.ROOM_ID]
-			room = self._rooms[roomId]
+			room = self.getRoom(params[ActionParam.ROOM_ID])
 			player = room.getPlayer(socket)
 			room.removePlayer(socket)
 
@@ -305,14 +384,80 @@ class Game(Thread):
 
 	def _startGameCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
-			roomId = params[ActionParam.ROOM_ID]
-			room = self._rooms[roomId]
+			room = self.getRoom(params[ActionParam.ROOM_ID])
 			if room.isPlayerInRoom(self.socket):
 				self._sharedGameData.room.status = RoomStatus.IN_GAME
-				self._sharedGameData.room.gamePhase = GamePhase.ELECTING_MASTER_ROOM
 				self._sharedGameData.roundNumber = 1
 				self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			print(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
+
+				self._sharedGameData.setGamePhase(GamePhase.ELECTING_ROUND_MASTER)
+
+				print(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
+
+				Countdown(
+					CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
+				).start()
+
+	def _changingGamePhaseCallback(self, gamePhase):
+		self._roomPrint(f'Fase - {gamePhase}')
+		if self._listenChangingGamePhaseCallback:
+			self._listenChangingGamePhaseCallback(gamePhase)
+
+	def _electingMasterRoomPhaseTimeIsUpCallback(self):
+		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.masterRoomVotes)
+
+		if len(moreVotesPlayers) > 1:
+			for player in self._sharedGameData.room.players:
+				if player not in moreVotesPlayers:
+					self._sharedGameData.electingOut[player.socket.ip] = player
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.RELECTING_ROUND_MASTER)
+
+			playersNickname = [player.nickname for player in moreVotesPlayers]
+			self._roomPrint(f'Eleição - Houveram empates. Ocorrerá outra rodada de votação com os jogadores: {", ".join(playersNickname)}.')
+
+			Countdown(
+				CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
+			).start()
+
+		else:
+			self._sharedGameData.roundMaster = moreVotesPlayers[0]
+			self._roomPrint(f'Eleição - \'{self._sharedGameData.roundMaster.nickname}\' venceu a eleição de organizador da rodada.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.CHOOSING_ROUND_WORD)
+			self._sharedGameData.electingOut = {}
+
+		self._sharedGameData.masterRoomVotes = {}
+
+
+	def _chooseVoteElectionRoundMasterCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket) 
+			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
+			self._sharedGameData.masterRoomVotes[socket.ip] = chosenPlayer
+
+			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
+
+	def _getMoreVotesPlayers(self, electionVotes):
+		votesByPlayer = {player.socket.ip: [player, 0] for player in self.getCurrentRoom().players}
+		for player in electionVotes.values():
+			votesByPlayer[player.socket.ip][1] += 1
+		playerByVotes = {}
+		totalVotes = 0
+		for ip, votesPlayer in votesByPlayer.items():
+			player, votes = votesPlayer
+			if not votes in playerByVotes:
+				totalVotes = votes if votes > totalVotes else totalVotes
+				playerByVotes[votes] = []
+			playerByVotes[votes].append(player)
+
+		return totalVotes, playerByVotes[totalVotes]
+
+
+	def _roomPrint(self, message):
+		print(f'Sala \'{self.getCurrentRoom().name}\': {message}')
 
 
 	def _sendPacketRequest(self, packet, toSocket=None):
@@ -421,7 +566,7 @@ class Game(Thread):
 			result = True
 		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
 			room = self._rooms.get(packet.params[ActionParam.ROOM_ID], None)
-			result = bool(room and socket.ip in room.players)
+			result = bool(room) and any(player.socket is socket for player in room.players)
 		elif approvationGroup == ActionGroup.ROOM_OWNER:
 			result = room = self._rooms.get(packet.params[ActionParam.ROOM_ID], None)
 			result = bool(room and socket is room.owner)
@@ -446,7 +591,7 @@ class Game(Thread):
 		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
 			roomPlayers = self._rooms[packet.params[ActionParam.ROOM_ID]].players
 			totalNeeded = len(roomPlayers) // 2 + 1
-			fullGroup = {socket for socket in roomPlayers.values()}
+			fullGroup = {player.socket for player in roomPlayers}
 
 		elif approvationGroup == ActionGroup.NONE:
 			totalNeeded = 2

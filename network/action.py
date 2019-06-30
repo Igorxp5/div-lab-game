@@ -67,14 +67,19 @@ class ActionError(Enum):
 	PLAYER_NAME_ALREADY_EXIST = (7, 'Um jogador com o nome solicitado já existe.')
 	ROOM_IS_FULL = (8, 'A sala está cheia.')
 	PLAYER_IS_NOT_OWNER = (9, 'O jogador não é o dono da sala.')
-	PLAYER_IS_NOT_ROOM_MASTER = (10, 'O jogador não é o organizador da rodada.')
-	PLAYER_IS_ROOM_MASTER = (11, 'O jogador é o organizador da rodada.')
-	TIME_IS_NOT_UP = (12, 'O tempo da rodada ainda não acabou.')
-	TIME_IS_UP = (13, 'O tempo da rodada acabou.')
-	PLAYER_NOT_MISSED_ANSWER = (14, 'O jogador não errou a palavra.')
-	PLAYER_CANT_BE_OWNER = (15, 'O jogador não é elegível a dono da sala.')
-	PLAYER_IS_A_OWNER = (16, 'O jogador já é dono de uma sala.')
-	MIN_PLAYERS_TO_START = (17, 'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}')
+	PLAYER_IS_NOT_ROUND_MASTER = (10, 'O jogador não é o organizador da rodada.')
+	PLAYER_IS_ROUND_MASTER = (11, 'O jogador é o organizador da rodada.')
+	PLAYER_WAS_ROUND_MASTER = (12, 'O jogador foi o organizador da rodada passada.')
+	TIME_IS_NOT_UP = (13, 'O tempo da rodada ainda não acabou.')
+	TIME_IS_UP = (14, 'O tempo da rodada acabou.')
+	PLAYER_NOT_MISSED_ANSWER = (15, 'O jogador não errou a palavra.')
+	PLAYER_CANT_BE_OWNER = (16, 'O jogador não é elegível a dono da sala.')
+	PLAYER_IS_A_OWNER = (17, 'O jogador já é dono de uma sala.')
+	MIN_PLAYERS_TO_START = (18, 'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}')
+	GAME_NOT_ELECTING_ROUND_MASTER = (19, 'O jogo não se encontra na rodada de eleição de organizador da rodada.')
+	PLAYER_IS_OUT_ELECTING = (20, 'O jogador não pode ser escolhido, ele está fora da eleição.')
+	ROOM_IN_GAME = (21, 'A sala já está em jogo.')
+	ROOM_ON_HOLD = (22, 'A sala ainda não começou a partida.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -104,11 +109,11 @@ class ActionCondiction(Enum):
 	)
 	ROOM_STATUS_IN_GAME = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].status is RoomStatus.IN_GAME)
-		else ActionError.GENERIC
+		else ActionError.ROOM_ON_HOLD
 	)
 	ROOM_STATUS_IN_WAIT = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].status is RoomStatus.ON_HOLD)
-		else ActionError.GENERIC
+		else ActionError.ROOM_IN_GAME
 	)
 	PLAYER_IS_NOT_A_OWNER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (len(rooms) == 0 or 
@@ -120,9 +125,9 @@ class ActionCondiction(Enum):
 			not rooms[params[ActionParam.ROOM_ID]].playerNameInRoom(params[ActionParam.PLAYER_NAME])
 		) else  ActionError.PLAYER_NAME_ALREADY_EXIST
 	)
-	PLAYER_NOT_IN_ROOM = lambda network, socket, rooms, game, params: (
+	PLAYER_NOT_IN_A_ROOM = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (len(rooms) == 0 or 
-			all((socket is not player.socket for room in rooms.values() for player in room.players)))
+			all((not room.isPlayerInRoom(socket) for room in rooms.values())))
 		else ActionError.PLAYER_IN_ROOM
 	)
 	PLAYER_INSIDE_ROOM = lambda network, socket, rooms, game, params: (
@@ -134,29 +139,30 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].owner is socket)
 		else ActionError.PLAYER_IS_NOT_OWNER
 	)
-	PLAYER_IS_MASTER_ROOM = lambda network, socket, rooms, game, params: (
+	PLAYER_IS_ROUND_MASTER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.roundMaster and game.roundMaster.socket.ip is socket)
-		else ActionError.PLAYER_IS_NOT_ROOM_MASTER
+		else ActionError.PLAYER_IS_NOT_ROUND_MASTER
 	)
-	PLAYER_IS_NOT_ROOM_MASTER = lambda network, socket, rooms, game, params: (
+	PLAYER_IS_NOT_ROUND_MASTER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.roundMaster and game.roundMaster.socket.ip is not socket)
-		else ActionError.PLAYER_IS_ROOM_MASTER
+		else ActionError.PLAYER_IS_ROUND_MASTER
 	)
 	TIME_NOT_IS_UP = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.phaseTime and game.phaseTime == 0)
-		else ActionError.TIME_IS_NOT_UP
+		ActionError.NONE if (game and game.phaseTime and game.phaseTime > CONFIG.END_PHASE_TIME)
+		else ActionError.TIME_IS_UP
 	)
 	TIME_IS_UP = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.phaseTime and game.phaseTime < 500)
-		else ActionError.TIME_IS_UP
+		ActionError.NONE if (game and game.phaseTime and game.phaseTime <= CONFIG.END_PHASE_TIME)
+		else ActionError.TIME_IS_NOT_UP
 	)
 	GAME_IS_WAITING_CONTESTS = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.WAITING_CONTESTS)
 		else ActionError.GENERIC
 	)
-	GAME_IS_ELECTING_MASTER_ROOM = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.gamePhase is GamePhase.ELECTING_MASTER_ROOM)
-		else ActionError.GENERIC
+	GAME_IS_ELECTING_ROUND_MASTER = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and game.gamePhase is GamePhase.ELECTING_ROUND_MASTER or 
+			game.gamePhase is GamePhase.RELECTING_ROUND_MASTER)
+		else ActionError.GAME_NOT_ELECTING_ROUND_MASTER
 	)
 	GAME_IS_ELECTING_CORRECT_ANSWER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.ELECTING_CORRECT_ANSWER)
@@ -175,15 +181,20 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_NOT_MISSED_ANSWER
 	)
 	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].isPlayerInRoom(params[ActionParam.SOCKET_IP]))
+		ActionError.NONE if (
+			rooms[params[ActionParam.ROOM_ID]].isPlayerInRoom(network.allNetwork[params[ActionParam.SOCKET_IP]]))
 		else ActionError.PLAYER_NOT_IN_ROOM
 	)
-	CHOSEN_PLAYER_IS_NOT_ROOM_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.roundMaster and 
-		game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
-		else ActionError.PLAYER_IS_NOT_ROOM_MASTER
+	CHOSEN_PLAYER_IS_NOT_ROUND_MASTER = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and (not game.roundMaster or 
+		game.roundMaster.socket.ip != params[ActionParam.SOCKET_IP]))
+		else ActionError.PLAYER_WAS_ROUND_MASTER
 	)
-	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM = lambda network, socket, rooms, game, params: (
+	CHOSEN_PLAYER_IS_NOT_OUT_ELECTING = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and params[ActionParam.SOCKET_IP] not in game.electingOut)
+		else ActionError.PLAYER_IS_OUT_ELECTING
+	)
+	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and (
 			(game.roundMaster and game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
 			or (game.contestingPlayer and game.contestingPlayer.socket.ip == params[ActionParam.SOCKET_IP])
@@ -210,24 +221,24 @@ class Action(Enum):
 	CREATE_ROOM = (1, 'Create Room', ActionRw.WRITE, 
 				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, 
 				   	ActionParam.PLAYERS_LIMIT, ActionParam.PLAYER_NAME), 
-				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_ROOM), 
+				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_A_ROOM), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 
 					  (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
-					  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_ROOM, 
+					  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_A_ROOM, 
 					  	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.PLAYER_NAME_IS_VALID), 
 					  ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 
 					   (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
-					   (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_ROOM, 
+					   (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_A_ROOM, 
 					   	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.PLAYER_NAME_IS_VALID), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
 						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING), 
-						 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_MASTER_ROOM, 
+						 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
 						 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_NOT_IS_UP), 
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
@@ -247,15 +258,16 @@ class Action(Enum):
 										 (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 										 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 										 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, 
-										 	ActionCondiction.GAME_IS_ELECTING_MASTER_ROOM, ActionCondiction.TIME_NOT_IS_UP, 
-										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_ROOM_MASTER), 
+										 	ActionCondiction.GAME_IS_ELECTING_ROUND_MASTER, ActionCondiction.TIME_NOT_IS_UP, 
+										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_ROUND_MASTER,
+										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING), 
 										 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	SEND_PLAYER_ANSWER = (8, 'Send Player Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION), 
 						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 						  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.GAME_IS_WAITING_ANSWERS,
-						  	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ROOM_MASTER), 
+						  	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ROUND_MASTER), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', ActionRw.WRITE, 
@@ -263,7 +275,8 @@ class Action(Enum):
 								  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM,
 								  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM,
 								  	ActionCondiction.GAME_IS_ELECTING_CORRECT_ANSWER, ActionCondiction.TIME_NOT_IS_UP,
-								  	ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_MASTER_ROOM), 
+								  	ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER,
+								  	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING), 
 								  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	GET_LIST_ROOMS = (10, 'Get List Rooms', ActionRw.READ, 
@@ -309,7 +322,7 @@ class Action(Enum):
 
 	SEND_MASTER_ANSWER = (17, 'Send Master Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION),
-						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_MASTER_ROOM,
+						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER,
 						  	ActionCondiction.GAME_IS_WAITING_ANSWERS,  ActionCondiction.TIME_IS_UP), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 

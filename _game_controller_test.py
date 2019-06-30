@@ -4,9 +4,10 @@ def gameController(game):
 	# print(room)
 	# print(room.toJsonDict())
 	# print(game._rooms)
-	# game.joinRoomToPlay('e86867ba-9b68-11e9-b8c3-b7fa3e2e08c2', 'Igorxp5')
+	# game.joinRoomToPlay(list(game._rooms.keys())[0], 'Igorxp5')
 	# game.quitRoom()
 	# game.startGame()
+	# game.voteRoomMaster(game.getCurrentRoom().owner)
 	# print(game._sharedGameData.phaseTime)
 	# print(game._packetWaitingApprovation)
 	# packet = game._packetWaitingApprovation['0e132674-9af5-11e9-b6f9-b8ac6fe7ea3b']['request_packet']

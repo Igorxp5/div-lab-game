@@ -25,15 +25,19 @@ class RoomStatus(JsonSerializable, Enum):
         raise NotImplementedError
 
 class GamePhase(JsonSerializable, Enum):
-    ELECTING_MASTER_ROOM = 1
-    CHOOSING_ROUND_WORD = 2
-    WAITING_ANSWERS = 3
-    WAITING_CONTESTS = 4
-    ELECTING_CORRECT_ANSWER = 5
-    RESULT_ROUND = 6
+    ELECTING_ROUND_MASTER = 'Eleição do Organizador da Rodada'
+    RELECTING_ROUND_MASTER = 'Releição do Organizador da Rodada'
+    CHOOSING_ROUND_WORD = 'Escolha da Palavra da Rodada'
+    WAITING_ANSWERS = 'Aguardando Respostas dos Jogadores'
+    WAITING_CONTESTS = 'Aguardando Contestações'
+    ELECTING_CORRECT_ANSWER = 'Eleição da Resposta Correta'
+    RESULT_ROUND = 'Resultado da Rodada'
 
     def __repr__(self):
         return f'{self.__class__.__name__}.{self.name}'
+
+    def __str__(self):
+        return self.value
 
     def _basicValue(self):
         return self.value

@@ -7,7 +7,7 @@ class Socket(JsonSerializable):
         self.connection = connection
 
     def __str__(self):
-        return f'{self.__class__.__name__}({self.ip}, {self.port})'
+        return f'{self.__class__.__name__}({repr(self.ip)}, {self.port})'
 
     def __repr__(self):
         return str(self)

@@ -5,6 +5,7 @@ from enum import Enum
 from utils.data_structure import JsonSerializable
 
 class PlayerStatus(JsonSerializable, Enum):
+    ON_HOLD                                             = 0
     WATCHING                                            = 1
     VOTING_ON_THE_ROUND_ORGANIZER                       = 2
     AWAITING_THE_END_OF_ORGANIZER_VOTE                  = 3
@@ -16,6 +17,9 @@ class PlayerStatus(JsonSerializable, Enum):
     AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST       = 9
     WAITING_FOR_NEXT_ROUND                              = 10
     ELIMINATED                                          = 11
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}.{self.name}'
 
     def _basicValue(self):
         return self.value

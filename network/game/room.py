@@ -11,6 +11,9 @@ class RoomStatus(JsonSerializable, Enum):
     IN_GAME = 1
     ON_HOLD = 2
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}.{self.name}'
+
     def _basicValue(self):
         return self.value
 
@@ -28,6 +31,9 @@ class GamePhase(JsonSerializable, Enum):
     WAITING_CONTESTS = 4
     ELECTING_CORRECT_ANSWER = 5
     RESULT_ROUND = 6
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}.{self.name}'
 
     def _basicValue(self):
         return self.value

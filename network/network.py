@@ -33,10 +33,14 @@ class Network(Thread):
 	@property
 	def socket(self):
 		return self._socket
-
+	
 	@property
 	def peers(self):
 		return {ip: socket for ip, socket in self._connections.items()}
+
+	@property
+	def allNetwork(self):
+		return {**self.peers, self.socket.ip: self.socket}
 	
 	def run(self):
 		self._discoveryService.start()
@@ -58,7 +62,7 @@ class Network(Thread):
 
 		else:
 			if packet.action.receiverGroup == ActionGroup.ALL_NETWORK:
-				for ip, socket in self._connections.items():
+				for ip, socket in self.allNetwork.items():
 					destination.append(socket)
 			else:
 				group = receiverGroupIps.get(packet.action.receiverGroup, {})
@@ -95,9 +99,7 @@ class Network(Thread):
 			self._listenThreads[ip] = thread
 			thread.start()
 
-			if not self._blockUntilConnectToNetwork.is_set():
-				self._blockUntilConnectToNetwork.set()
-		except TimeoutError:
+		except (TimeoutError, ConnectionRefusedError):
 			print(f'Não foi possível conectar-se a {address}')
 
 			if (any([not t.is_alive() for t in self._connectingPeerThreads if t]) and
@@ -122,6 +124,9 @@ class Network(Thread):
 	def _listenConnection(self, socket):
 		print('Conectado a', socket.ip, socket.port)
 
+		if not self._blockUntilConnectToNetwork.is_set():
+			self._blockUntilConnectToNetwork.set()
+
 		while True:
 			try:
 				data = socket.connection.recv(Network.TCP_RECEIVE_BYTES)
@@ -130,18 +135,23 @@ class Network(Thread):
 
 			if not data:
 				break
-			try:
-				packet = Packet.parse(data)
 
-				if self._listenPacketCallback:
-					self._listenPacketCallback(socket, packet)
-
-			except InvalidPacketError:
-				print(f'Invalid Packet arrived from {socket} was ignored.')
-			except InvalidActionParams:
-				print(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
+			self._handleRecvData(socket, data)
+			
 
 		self._disconnectFromSocket(socket)
+
+	def _handleRecvData(self, socket, data):
+		try:
+			packet = Packet.parse(data)
+
+			if self._listenPacketCallback:
+				self._listenPacketCallback(socket, packet)
+
+		except InvalidPacketError:
+			print(f'Invalid Packet arrived from {socket} was ignored.')
+		except InvalidActionParams:
+			print(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
 
 	def _disconnectFromSocket(self, socket):
 		socket.connection.close()
@@ -150,7 +160,10 @@ class Network(Thread):
 		print(f'Desconectado de {socket}')
 
 	def _sendPacketToPeer(self, socket, packet):
-		socket.connection.send(packet.toBytes())
+		if socket is self.socket:
+			self._handleRecvData(socket, packet.toBytes())
+		else:
+			socket.connection.send(packet.toBytes())
 
 if __name__ == '__main__':
 	discoveryAddress = '25.8.61.75', 8400

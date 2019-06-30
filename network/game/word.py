@@ -13,6 +13,11 @@ class Word(JsonSerializable):
     def __repr__(self):
         return repr(self.toJsonDict())
 
+    def __eq__(self, other):
+        if not isinstance(other, Word):
+            raise TypeError('expected a Word')
+        return self.syllables == other.syllables and self.wordStr == other.wordStr
+
     def setWordStr(self, wordStr):
         self.wordStr = wordStr
 

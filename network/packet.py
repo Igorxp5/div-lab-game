@@ -1,7 +1,7 @@
 import uuid
 import json
 
-from .action import Action, ActionParam, InvalidActionParams
+from .action import Action, ActionParam, ActionError, InvalidActionParams
 
 from enum import Enum
 
@@ -64,11 +64,12 @@ class Packet:
             content = None
             if headers_content[1]:
                 content = json.loads(headers_content[1])
+
+                if packetType == PacketType.REQUEST:
+                    content = {ActionParam.getByValue(key): value for key, value in content.items()}
+                    content = {key: key(value) for key, value in content.items()}
             
             if packetType == PacketType.REQUEST:
-                content = {ActionParam.getByValue(key): value for key, value in content.items()}
-                content = {key: key(value) for key, value in content.items()}
-
                 packet = PacketRequest(action, content, uuid=uuid)
 
                 if not all([param in content for param in action.params]):
@@ -76,7 +77,8 @@ class Packet:
 
             if packetType == PacketType.RESPONSE:
                 approved = headers['APPROVED'] == 'True'
-                packet = PacketResponse(action, approved, content, uuid=uuid)
+                actionError = ActionError.getByCode(int(headers['ERROR-CODE']))
+                packet = PacketResponse(action, approved, actionError, content, uuid=uuid)
 
         except NotImplementedError:
             raise InvalidPacketError
@@ -92,6 +94,9 @@ class PacketRequest(Packet):
         super().__init__(PacketType.REQUEST, action, uuid)
         self.params = params
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({repr(self.uuid)}, {repr(self.action)})'
+
     def __str__(self):
         base = super().__str__()
         if self.params:
@@ -101,14 +106,24 @@ class PacketRequest(Packet):
         return base + '\r\n'
 
 class PacketResponse(Packet):
-    def __init__(self, action, approved, content=None, uuid=None):
+    def __init__(self, action, approved, actionError=ActionError.NONE, content=None, uuid=None):
         super().__init__(PacketType.RESPONSE, action, uuid)
         self.approved = str(bool(approved))
+        self.actionError = actionError
         self.content = content
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({repr(self.uuid)}, {repr(self.action)}, {self.approved}, {self.actionError})'
 
     def __str__(self):
         base = super().__str__()
-        data = f'APPROVED: {self.approved}\r\n\r\n'
+        data = f'APPROVED: {self.approved}\r\n'
+        data += f'ERROR-CODE: {self.actionError.code}\r\n\r\n'
         if self.content:
             data += f'{json.dumps(self.content)}\r\n\r\n'
         return base + data
+
+    def __eq__(self, other):
+        return (self.uuid == other.uuid and 
+                    self.approved == other.approved and 
+                    self.actionError == other.actionError)

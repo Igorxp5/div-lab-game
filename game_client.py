@@ -110,6 +110,7 @@ class Game(Thread):
 		self._listenPacketCallbackByAction[Action.JOIN_ROOM_PLAY].append(self._joinRoomCallback)
 
 		self._packetWaitingApprovation = {}
+		self._donePacketHandler = set()
 
 		self._waitDownloadListRooms = Event()
 
@@ -261,6 +262,10 @@ class Game(Thread):
 		self._packetWaitingApprovation[packet.uuid]['request_packet'] = packet
 
 	def _waiterHandler(self, socket, packet):
+		# Ignorar pacotes de ações já aprovadas ou desaprovadas
+		if packet.uuid in self._donePacketHandler:
+			return
+
 		self._createPacketWaiter(packet)
 
 		packetResponse = None
@@ -289,10 +294,17 @@ class Game(Thread):
 
 
 		isPacketApproved = self._isPacketApproved(socket, packet)
+		isPacketDisapproved = self._isPacketDisapproved(socket, packet)
 		self._packetWaitingApprovation[packet.uuid]['lock'].release()
 
 		if isPacketApproved:
+			self._donePacketHandler.add(packet.uuid)
 			self._packetApprovedCallback(packet)
+		elif isPacketDisapproved:
+			self._donePacketHandler.add(packet.uuid)
+
+		if isPacketApproved or isPacketDisapproved:
+			del self._packetWaitingApprovation[packet.uuid]
 
 	def _isSocketInApprovationGroup(self, socket, packet):
 		result = None
@@ -316,6 +328,39 @@ class Game(Thread):
 				return actionError
 		return ActionError.NONE
 
+	def _approvationRequirement(self, socket, packet):
+		totalNeeded = None
+		fullGroup = set()
+		approvationGroup = packet.action.approvationGroup
+
+		def invalidPacket():
+			print(f'Game Packet invalid arrived from {socket} was ignored.')
+			return float('inf')
+
+		if approvationGroup == ActionGroup.ALL_NETWORK:
+			totalNeeded = len(self._network.allNetwork) // 2 + 1
+			fullGroup = {socket for socket in self._network.allNetwork.values()}
+
+		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
+			if packet.params[ActionParam.ROOM_ID] not in self._rooms:
+				totalNeeded = invalidPacket()
+			else:
+				roomPlayers = self._rooms[packet.params[ActionParam.ROOM_ID]].players
+				totalNeeded = len(roomPlayers) // 2 + 1
+				fullGroup = {socket for socket in roomPlayers.values()}
+
+		elif approvationGroup == ActionGroup.NONE:
+			totalNeeded = 2
+			fullGroup = {socket for socket in self._network.allNetwork.values()}
+
+		elif approvationGroup == ActionGroup.ROOM_OWNER:
+			room = self._rooms[packet.params[ActionParam.ROOM_ID]]
+			totalNeeded = 1
+			fullGroup = {room.owner}
+
+		return totalNeeded, fullGroup
+
+
 	def _isPacketApproved(self, socket, testPacket):
 		packet = self._packetWaitingApprovation[testPacket.uuid]['request_packet']
 
@@ -323,40 +368,23 @@ class Game(Thread):
 			return False 
 
 		agreementsList = self._packetWaitingApprovation[packet.uuid]['agreements_list']
-		approvationGroup = packet.action.approvationGroup
-		totalNeeded = None
-		totalApprovation = None
+		totalNeeded, fullGroup = self._approvationRequirement(socket, packet)
+		totalApprovation = {socket for socket in agreementsList if socket in fullGroup}
 
-		def invalidPacket():
-			print(f'Game Packet invalid arrived from {socket} was ignored.')
-			return float('inf'), 0
+		return len(totalApprovation) >= totalNeeded
 
-		if approvationGroup == ActionGroup.ALL_NETWORK:
-			totalNeeded = len(self._network.allNetwork) // 2 + 1
-			totalApprovation = [socket for socket in self._network.allNetwork.values() if socket in agreementsList]
-			totalApprovation = len(totalApprovation)
+	def _isPacketDisapproved(self, socket, testPacket):
+		packet = self._packetWaitingApprovation[testPacket.uuid]['request_packet']
 
-		elif approvationGroup == ActionGroup.ROOM_PLAYERS:
-			if packet.params[ActionParam.ROOM_ID] not in self._rooms:
-				totalNeeded, totalApprovation = invalidPacket()
-			else:
-				roomPlayers = self._rooms[packet.params[ActionParam.ROOM_ID]].players
-				totalNeeded = len(roomPlayers) // 2 + 1
-				totalApprovation = len([player for player in self._network.peers.values() if player.socket in agreementsList])
-		
-		elif approvationGroup == ActionGroup.NONE:
-			totalNeeded = 2
-			totalApprovation = len(agreementsList)
+		if not packet:
+			return False 
 
-		elif approvationGroup == ActionGroup.ROOM_OWNER:
-			if packet.params[ActionParam.ROOM_ID] not in self._rooms:
-				totalNeeded, totalApprovation = invalidPacket()
-			else:
-				room = self._rooms[packet.params[ActionParam.ROOM_ID]]
-				totalNeeded = 1
-				totalApprovation = 1 if room.owner in agreementsList else 0
+		disagreementsList = self._packetWaitingApprovation[packet.uuid]['disagreements_list']
+		totalNeeded, fullGroup = self._approvationRequirement(socket, packet)
+		totalDisaprovation = {socket for socket in disagreementsList if socket in fullGroup}
 
-		return totalApprovation >= totalNeeded
+		return len(fullGroup) - len(totalDisaprovation) < totalNeeded 
+
 
 
 if __name__ == '__main__':

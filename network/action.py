@@ -230,7 +230,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_ALREADY_CHOOSE_ROUND_WORD
 	)
 	PLAYER_NOT_VOTED_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and socket.ip not in game.masterRoomVotes)
+		ActionError.NONE if (game and socket.ip not in game.roundMasterVotes)
 		else ActionError.PLAYER_ALREADY_VOTE_ROUND_MASTER
 	)
 	PLAYER_NOT_ANSWER_YET = lambda network, socket, rooms, game, params: (

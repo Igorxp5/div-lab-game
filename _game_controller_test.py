@@ -9,6 +9,7 @@ def gameController(game):
 	# game.startGame()
 	# game.voteRoomMaster(game.socket)
 	# game.chooseRoundWord('bola', 'bo-la')
+	# game.answerRoundWord('bo-la')
 	# print(game._sharedGameData)
 	# print(game._sharedGameData.phaseTime)
 	# print(game._packetWaitingApprovation)

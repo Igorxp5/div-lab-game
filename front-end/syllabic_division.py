@@ -79,7 +79,7 @@ class SyllabicDivisionWindow(QMainWindow):
 
         #Caixa de palavra da rodada
         self.nameLabel = QLabel(self)
-        self.nameLabel.setText('PALAVRA DA RODADA')
+        self.nameLabel.setText('PALAVRA DA RODADA:')
         self.nameLabel.resize(200, 32)
         self.nameLabel.move(350, 300)
         self.line = QLineEdit(self)

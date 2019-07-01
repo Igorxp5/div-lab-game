@@ -6,7 +6,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtCore import QSize    
 
 #---- CRONÔMETRO IMPLEMENTADO EM OUTRA CLASSE
-class ContestationWindow(QMainWindow):
+class SyllabicDivisionWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         
@@ -33,7 +33,7 @@ class ContestationWindow(QMainWindow):
 
         #texto fase de eleição do organizador
         self.text = QLabel(self)
-        self.text.setText('Fase: Contestação da resposta')
+        self.text.setText('Fase: Divisão Silábica')
         self.text.setWordWrap(True)
         self.text.setStyleSheet("font: 15pt") 
         self.text.move(250, 150)   
@@ -46,7 +46,7 @@ class ContestationWindow(QMainWindow):
         self.text.setStyleSheet("font: 15pt") 
         self.text.move(800, 150)   
         self.text.setMinimumSize(1000, 32)
-    
+
         #Lista de jogadores da sala
         # ----- COLOCAR ÍCONE AO LADO DE QUEM ESTA ASSISTINDO
         # ----- ESSA MESMA LISTA SERVIRÁ PARA VOTAR EM UM ORGANIZADOR DA PARTIDA
@@ -81,27 +81,27 @@ class ContestationWindow(QMainWindow):
         self.nameLabel = QLabel(self)
         self.nameLabel.setText('PALAVRA DA RODADA')
         self.nameLabel.resize(200, 32)
-        self.nameLabel.move(250, 300)
+        self.nameLabel.move(350, 300)
         self.line = QLineEdit(self)
         self.line.cursor  
         self.line.setText('PARALELEPIPADO')
-        self.line.move(360, 300)
+        self.line.move(350, 340)
         self.line.resize(200, 32)
 
         #Caixa de divisão silábica
         self.nameLabel = QLabel(self)
-        self.nameLabel.setText('DIVISÃO SILÁBICA')
-        self.nameLabel.resize(200, 32)
-        self.nameLabel.move(250, 380)
+        self.nameLabel.setText('RESPOSTA:')
+        self.nameLabel.resize(80, 32)
+        self.nameLabel.move(290, 500)
         self.line = QLineEdit(self)    
-        self.line.move(360, 380)
-        self.line.resize(200, 32)
+        self.line.move(350, 500)
+        self.line.resize(400, 32)
 
         #Botão de votar em um organizador para partida
-        voteButton = QPushButton('Enviar Palavra', self)
+        voteButton = QPushButton('Enviar', self)
         #voteButton.clicked.connect(self.clickMethod)
         voteButton.resize(200, 32)
-        voteButton.move(450, 500)
+        voteButton.move(750, 500)
 
 #Ação de clicar em um item da lista
 class myListWidget(QListWidget):
@@ -111,6 +111,6 @@ class myListWidget(QListWidget):
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    contestationWin = ContestationWindow()
-    contestationWin.show()
+    syllabicDivisionWin = SyllabicDivisionWindow()
+    syllabicDivisionWin.show()
     sys.exit( app.exec_() )

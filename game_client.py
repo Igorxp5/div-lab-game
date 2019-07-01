@@ -204,6 +204,9 @@ class GameClient(Thread):
 			ActionParam.PLAYERS_LIMIT: room.limitPlayers,
 			ActionParam.PLAYER_NAME: playerName
 		}
+
+		self._raiseActionIfNotCondictions(Action.CREATE_ROOM, params)
+
 		packet = PacketRequest(Action.CREATE_ROOM, params)
 		self._sendPacketRequest(packet)
 		return room
@@ -213,61 +216,40 @@ class GameClient(Thread):
 			ActionParam.ROOM_ID: roomId,
 			ActionParam.PLAYER_NAME: playerName
 		}
+
+		self._raiseActionIfNotCondictions(Action.JOIN_ROOM_PLAY, params)
+
 		packet = PacketRequest(Action.JOIN_ROOM_PLAY, params)
 		self._sendPacketRequest(packet)
 
 	def quitRoom(self):
-		if not self._sharedGameData.room:
-			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
 		params = {
-			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
 		}
+
+		self._raiseActionIfNotCondictions(Action.QUIT_ROOM, params)
+
 		packet = PacketRequest(Action.QUIT_ROOM, params)
 		self._sendPacketRequest(packet)
 
 	def startGame(self):
-		if not self._sharedGameData.room:
-			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
-
-		if self._sharedGameData.room.owner is not self.socket:
-			raise GameActionError(ActionError.PLAYER_IS_NOT_OWNER)
-
-		if len(self._sharedGameData.room.players) < CONFIG.MIN_PLAYERS_TO_START:
-			raise GameActionError(ActionError.MIN_PLAYERS_TO_START)
-
 		params = {
-			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
 		}
+
+		self._raiseActionIfNotCondictions(Action.START_ROOM_GAME, params)
+
 		packet = PacketRequest(Action.START_ROOM_GAME, params)
 		self._sendPacketRequest(packet)
 
 	def voteRoomMaster(self, voteSocket):
-		if not self._sharedGameData.room:
-			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
-
-		if not(self._sharedGameData.gamePhase == GamePhase.ELECTING_ROUND_MASTER or
-				self._sharedGameData.gamePhase == GamePhase.RELECTING_ROUND_MASTER):
-			raise GameActionError(ActionError.GAME_NOT_ELECTING_ROUND_MASTER)
-
-		if not self._sharedGameData.room.isPlayerInRoom(voteSocket):
-			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
-
-		if self._sharedGameData.phaseTime <= CONFIG.END_PHASE_TIME:
-			raise GameActionError(ActionError.TIME_IS_UP)
-
-		if not self._sharedGameData.room.isPlayerInRoom(voteSocket):
-			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
-
-		if self._sharedGameData.roundMaster and self._sharedGameData.roundMaster.socket == voteSocket:
-			raise GameActionError(ActionError.PLAYER_WAS_ROUND_MASTER)
-
-		if voteSocket in self._sharedGameData.electingOut:
-			raise GameActionError(ActionError.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING)
-
 		params = {
-			ActionParam.ROOM_ID: self._sharedGameData.room.id,
+			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
 			ActionParam.SOCKET_IP: voteSocket.ip,
 		}
+		
+		self._raiseActionIfNotCondictions(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
+		
 		packet = PacketRequest(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
 		self._sendPacketRequest(packet)
 
@@ -386,6 +368,15 @@ class GameClient(Thread):
 			for id_, room in content.items():
 				roomJsonData = json.dumps(room)
 				self._rooms[id_] = Room.parseJson(roomJsonData, self._network.allNetwork)
+
+	def _raiseActionIfNotCondictions(self, action, params):
+		for condition in action.conditions:
+			actionError = condition(
+				self._network, self.socket, self._rooms, self._sharedGameData, params
+			)
+			if actionError != ActionError.NONE:
+				raise GameActionError(actionError)
+
 
 	def _createRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -642,8 +633,8 @@ class GameClient(Thread):
 		return result
 
 	def _testPacketConditions(self, socket, packet):
-		for conditions in packet.action.conditions:
-			actionError = conditions(self._network, socket, self._rooms, self._sharedGameData, packet.params)
+		for condition in packet.action.conditions:
+			actionError = condition(self._network, socket, self._rooms, self._sharedGameData, packet.params)
 			if actionError != ActionError.NONE:
 				return actionError
 		return ActionError.NONE

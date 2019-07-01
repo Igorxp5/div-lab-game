@@ -419,8 +419,8 @@ class GameClient(Thread):
 	def _startGameCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
+			room.status = RoomStatus.IN_GAME
 			if room.isPlayerInRoom(self.socket):
-				self._sharedGameData.room.status = RoomStatus.IN_GAME
 				self._sharedGameData.roundNumber = 1
 				self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 
@@ -500,7 +500,7 @@ class GameClient(Thread):
 
 	def _removeSocketFromRoom(self, room, socket):
 		player = room.getPlayer(socket)
-		
+
 		if player:
 			room.removePlayer(socket)
 

@@ -1,5 +1,7 @@
 import network.config as CONFIG
+
 from .game.room import RoomStatus, GamePhase
+from .game.player import PlayerStatus
 
 from enum import Enum
 
@@ -83,6 +85,7 @@ class ActionError(Enum):
 	PLAYER_ALREADY_VOTE_ROUND_MASTER = (23, 'O jogador já votou no organizador da rodada.')
 	PLAYER_ALREADY_CHOOSE_ROUND_WORD = (24, 'O jogador já escolheu a palavra da rodada.')
 	PLAYER_ALREADY_ANSWERED = (25, 'O jogador já respondeu a divisão silábica da rodada.')
+	PLAYER_IS_ELIMINATED = (26, 'O jogador já está eliminado da partida.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -193,8 +196,8 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_NOT_IN_ROOM
 	)
 	CHOSEN_PLAYER_IS_NOT_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and (not game.roundMaster or 
-		game.roundMaster.socket.ip != params[ActionParam.SOCKET_IP]))
+		ActionError.NONE if (not game.roundMaster or 
+		game.roundMaster.socket.ip != params[ActionParam.SOCKET_IP])
 		else ActionError.PLAYER_WAS_ROUND_MASTER
 	)
 	CHOSEN_PLAYER_IS_NOT_OUT_ELECTING = lambda network, socket, rooms, game, params: (
@@ -202,10 +205,10 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_IS_OUT_ELECTING
 	)
 	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and (
+		ActionError.NONE if (
 			(game.roundMaster and game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
 			or (game.contestingPlayer and game.contestingPlayer.socket.ip == params[ActionParam.SOCKET_IP])
-		)) else ActionError.GENERIC
+		) else ActionError.GENERIC
 	)
 	PLAYER_CAN_BE_OWNER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].owner not in network.peers and 
@@ -225,17 +228,22 @@ class ActionCondiction(Enum):
 		else ActionError.MIN_PLAYERS_TO_START
 	)
 	PLAYER_NOT_CHOOSED_ROUND_WORD_YET = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.roundMaster and 
+		ActionError.NONE if (game.roundMaster and 
 			game.roundMaster.socket == socket and game.roundWord is None)
 		else ActionError.PLAYER_ALREADY_CHOOSE_ROUND_WORD
 	)
 	PLAYER_NOT_VOTED_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and socket.ip not in game.roundMasterVotes)
+		ActionError.NONE if (socket.ip not in game.roundMasterVotes)
 		else ActionError.PLAYER_ALREADY_VOTE_ROUND_MASTER
 	)
 	PLAYER_NOT_ANSWER_YET = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and socket.ip not in game.roundAnswers)
+		ActionError.NONE if (socket.ip not in game.roundAnswers)
 		else ActionError.PLAYER_ALREADY_ANSWERED
+	)
+	PLAYER_IS_NOT_ELIMINATED = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game.room and 
+			game.room.getPlayer(socket).status not in (PlayerStatus.ELIMINATED, PlayerStatus.WATCHING))
+		else ActionError.PLAYER_IS_ELIMINATED
 	)
 
 	def __repr__(self):
@@ -269,8 +277,8 @@ class Action(Enum):
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
 						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING, ActionParam.WORD_DIVISION),
 						 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
-						 	ActionCondiction.GAME_IS_CHOOSING_ROUND_WORD,
-						 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_NOT_IS_UP,
+						 	ActionCondiction.GAME_IS_CHOOSING_ROUND_WORD, ActionCondiction.ROOM_STATUS_IN_GAME, 
+						 	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ELIMINATED,
 						 	ActionCondiction.PLAYER_NOT_CHOOSED_ROUND_WORD_YET), 
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 

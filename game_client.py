@@ -484,7 +484,7 @@ class GameClient(Thread):
 
 	def _chooseRoundWordTimeIsUpCallback(self):
 		if not self._sharedGameData.roundWord:
-			self._sharedGameData.roundMaster.status = ELIMINATED
+			self._sharedGameData.roundMaster.status = PlayerStatus.ELIMINATED
 			self._nextRound()
 
 	def _chooseVoteElectionRoundMasterCallback(self, socket, params, actionError):

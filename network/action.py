@@ -80,6 +80,9 @@ class ActionError(Enum):
 	PLAYER_IS_OUT_ELECTING = (20, 'O jogador não pode ser escolhido, ele está fora da eleição.')
 	ROOM_IN_GAME = (21, 'A sala já está em jogo.')
 	ROOM_ON_HOLD = (22, 'A sala ainda não começou a partida.')
+	PLAYER_ALREADY_VOTE_ROUND_MASTER = (23, 'O jogador já votou no organizador da rodada.')
+	PLAYER_ALREADY_CHOOSE_ROUND_WORD = (24, 'O jogador já escolheu a palavra da rodada.')
+	PLAYER_ALREADY_ANSWERED = (25, 'O jogador já respondeu a divisão silábica da rodada.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -172,6 +175,10 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (game and game.gamePhase is GamePhase.WAITING_ANSWERS)
 		else ActionError.GENERIC
 	)
+	GAME_IS_CHOOSING_ROUND_WORD = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and game.gamePhase is GamePhase.CHOOSING_ROUND_WORD)
+		else ActionError.GENERIC
+	) 
 	GAME_IS_RESULT_ROUND = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.RESULT_ROUND)
 		else ActionError.GENERIC
@@ -217,6 +224,19 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (params[ActionParam.PLAYERS_LIMIT] >= CONFIG.MIN_PLAYERS_TO_START)
 		else ActionError.MIN_PLAYERS_TO_START
 	)
+	PLAYER_NOT_CHOOSED_ROUND_WORD_YET = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and game.roundMaster and 
+			game.roundMaster.socket == socket and game.roundWord is None)
+		else ActionError.PLAYER_ALREADY_CHOOSE_ROUND_WORD
+	)
+	PLAYER_NOT_VOTED_ROUND_MASTER = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and socket.ip not in game.masterRoomVotes)
+		else ActionError.PLAYER_ALREADY_VOTE_ROUND_MASTER
+	)
+	PLAYER_NOT_ANSWER_YET = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and socket.ip not in game.roundAnswers)
+		else ActionError.PLAYER_ALREADY_ANSWERED
+	)
 
 	def __repr__(self):
 		return f'{self.__class__.__name__}.{self.name}'
@@ -249,7 +269,9 @@ class Action(Enum):
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
 						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING, ActionParam.WORD_DIVISION),
 						 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
-						 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_NOT_IS_UP), 
+						 	ActionCondiction.GAME_IS_CHOOSING_ROUND_WORD,
+						 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_NOT_IS_UP,
+						 	ActionCondiction.PLAYER_NOT_CHOOSED_ROUND_WORD_YET), 
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CONTEST_WORD = (5, 'Contest Word', ActionRw.WRITE, 
@@ -269,7 +291,8 @@ class Action(Enum):
 										 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 										 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM, 
 										 	ActionCondiction.GAME_IS_ELECTING_ROUND_MASTER, ActionCondiction.TIME_NOT_IS_UP, 
-										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_ROUND_MASTER,
+										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_ROUND_MASTER, 
+										 	ActionCondiction.PLAYER_NOT_VOTED_ROUND_MASTER,
 										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING), 
 										 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
@@ -277,7 +300,8 @@ class Action(Enum):
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION), 
 						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 						  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.GAME_IS_WAITING_ANSWERS,
-						  	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ROUND_MASTER), 
+						  	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ROUND_MASTER,
+						  	ActionCondiction.PLAYER_NOT_ANSWER_YET), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', ActionRw.WRITE, 

@@ -245,7 +245,8 @@ class GameClient(Thread):
 		if not self._sharedGameData.room:
 			raise GameActionError(ActionError.PLAYER_NOT_IN_ROOM)
 
-		if self._sharedGameData.gamePhase != GamePhase.ELECTING_ROUND_MASTER:
+		if not(self._sharedGameData.gamePhase == GamePhase.ELECTING_ROUND_MASTER or
+				self._sharedGameData.gamePhase == GamePhase.RELECTING_ROUND_MASTER):
 			raise GameActionError(ActionError.GAME_NOT_ELECTING_ROUND_MASTER)
 
 		if not self._sharedGameData.room.isPlayerInRoom(voteSocket):

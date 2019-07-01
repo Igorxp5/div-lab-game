@@ -411,6 +411,9 @@ class GameClient(Thread):
 			self._sharedGameData.room = room
 			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\'.')
 
+			if len(room.players) == room.limitPlayers and room.owner is self.socket:
+				self.startGame()
+
 	def _quitRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])

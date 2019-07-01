@@ -59,7 +59,7 @@ class PollWindow(QMainWindow):
         voteButton = QPushButton('Votar', self)
         #voteButton.clicked.connect(self.clickMethod)
         voteButton.resize(200, 32)
-        voteButton.move(300, 550)
+        voteButton.move(300, 400)
     
         #Lista de jogadores da sala
         # ----- COLOCAR ÍCONE AO LADO DE QUEM ESTA ASSISTINDO

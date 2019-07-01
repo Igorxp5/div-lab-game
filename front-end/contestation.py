@@ -10,7 +10,7 @@ class ContestationWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         
-       #janela
+         #janela
         self.resize(1000, 600)
         self.qtRectangle = self.frameGeometry()
         self.setMinimumSize(self.sizeHint())    
@@ -18,7 +18,7 @@ class ContestationWindow(QMainWindow):
         
         #título
         title = QLabel(self)
-        title.setText('SALA X') 
+        title.setText('SALA ' + 'X') 
         title.setStyleSheet("font: 30pt")
         title.resize(200, 32)
         title.move(10, 10)
@@ -33,7 +33,7 @@ class ContestationWindow(QMainWindow):
 
         #texto fase de eleição do organizador
         self.text = QLabel(self)
-        self.text.setText('Fase: Contestação da Resposta')
+        self.text.setText('Fase: Contestação da resposta')
         self.text.setWordWrap(True)
         self.text.setStyleSheet("font: 15pt") 
         self.text.move(250, 150)   
@@ -47,18 +47,14 @@ class ContestationWindow(QMainWindow):
         self.text.move(800, 150)   
         self.text.setMinimumSize(1000, 32)
 
-        #Botão de começar
-        startButton = QPushButton('Começar', self)
-        #startButton.clicked.connect(self.clickMethod)
-        startButton.resize(200, 32)
-        startButton.move(300, 550)
+        #texto explicação votação do organizador da rodada  
+        self.text = QLabel(self)
+        self.text.setText('Eleja um dos jogadores para ser o organizador desta rodada. Ele será responsável por escolher a palavra da rodada.')
+        self.text.setWordWrap(True)
+        self.text.setStyleSheet("font: 10pt") 
+        self.text.move(250, 220)   
+        self.text.setMinimumSize(500, 32)
     
-        #Botão de sair
-        leaveButton = QPushButton('Sair', self)
-        #leaveButton.clicked.connect(self.clickMethod)
-        leaveButton.resize(200, 32)
-        leaveButton.move(500, 550)
-
         #Lista de jogadores da sala
         # ----- COLOCAR ÍCONE AO LADO DE QUEM ESTA ASSISTINDO
         # ----- ESSA MESMA LISTA SERVIRÁ PARA VOTAR EM UM ORGANIZADOR DA PARTIDA
@@ -85,10 +81,35 @@ class ContestationWindow(QMainWindow):
         listView.addItem("Jogador 20")
         listView.addItem("Jogador 21")
         listView.addItem("Jogador 22")
-
         #listView.clicked.connect() add função de clique
         listView.move(50, 200)
         listView.resize(180, 300)
+
+        #Caixa de palavra da rodada
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('PALAVRA DA RODADA')
+        self.nameLabel.resize(200, 32)
+        self.nameLabel.move(250, 300)
+        self.line = QLineEdit(self)
+        self.line.cursor  
+        self.line.setText('PARALELEPIPADO')
+        self.line.move(360, 300)
+        self.line.resize(200, 32)
+
+        #Caixa de divisão silábica
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('DIVISÃO SILÁBICA')
+        self.nameLabel.resize(200, 32)
+        self.nameLabel.move(250, 380)
+        self.line = QLineEdit(self)    
+        self.line.move(360, 380)
+        self.line.resize(200, 32)
+
+        #Botão de votar em um organizador para partida
+        voteButton = QPushButton('Enviar Palavra', self)
+        #voteButton.clicked.connect(self.clickMethod)
+        voteButton.resize(200, 32)
+        voteButton.move(450, 500)
 
 #Ação de clicar em um item da lista
 class myListWidget(QListWidget):

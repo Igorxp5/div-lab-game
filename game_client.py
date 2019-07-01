@@ -22,9 +22,6 @@ from importlib import reload
 
 import _game_controller_test
 
-def startThread(target, *args):
-	Thread(target=target, args=args, daemon=True).start()
-
 class GameActionError(RuntimeError):
 	def __init__(self, actionError):
 		self.actionError = actionError
@@ -139,20 +136,23 @@ class GameClient(Thread):
 
 		self._network = Network(self._discoveryAddress, self._tcpAddress)
 		self._network.setListenPacketCallback(self._listenPacketCallback)
+		self._network.setDisconnectCallback(self._disconnectCallback)
 
 		self._rooms = {}
-		self._sharedGameData = SharedGameData()
+		self._sharedGameData = None
+		self._initSharedGameData()
 
 		# Adicionando callbacks para os tipos de pacotes
 		self._listenPacketCallbackByAction = {action: [] for action in Action}
 		self._listenChangingGamePhaseCallback = None
+		self._listenDisconnectSocketCallback = None
 		self._registerDefaultListenCallbacks()
-		self._sharedGameData.setChangingGamePhaseCallback(self._changingGamePhaseCallback)
 
 		self._packetWaitingApprovation = {}
 		self._donePacketHandler = set()
 
 		self._waitDownloadListRooms = Event()
+		self._removePlayerFromRoomLock = Lock()
 
 	@property
 	def _receiverGroupIps(self):
@@ -330,6 +330,16 @@ class GameClient(Thread):
 	def removeChangingGamePhaseCallback(self):
 		self._listenChangingGamePhaseCallback = None
 
+	def setDisconnectCallback(self, callback):
+		self._listenDisconnectSocketCallback = callback
+
+	def removeDisconnectCallback(self):
+		self._listenDisconnectSocketCallback = None
+
+	def _initSharedGameData(self):
+		self._sharedGameData = SharedGameData()
+		self._sharedGameData.setChangingGamePhaseCallback(self._changingGamePhaseCallback)
+
 	def _registerDefaultListenCallbacks(self):
 		defaultListPacketCallbacks = {
 			Action.GET_LIST_ROOMS: self._getListRoomsCallback,
@@ -404,16 +414,7 @@ class GameClient(Thread):
 	def _quitRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
-			player = room.getPlayer(socket)
-			room.removePlayer(socket)
-
-			print(f'O jogador {player.nickname} saiu da sala \'{room.name}\'.')
-
-			if self._sharedGameData.room and self._sharedGameData.room.id == roomId:
-				self._sharedGameData.room = None
-
-			if len(room.players) == 0:
-				del self._rooms[roomId]
+			self._removeSocketFromRoom(room, socket)
 
 	def _startGameCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -488,10 +489,41 @@ class GameClient(Thread):
 
 		return totalVotes, playerByVotes[totalVotes]
 
-
 	def _roomPrint(self, message):
 		print(f'Sala \'{self.getCurrentRoom().name}\': {message}')
 
+	def _disconnectCallback(self, socket):
+		self._removeSocketFromRooms(socket)
+
+		if self._listenDisconnectSocketCallback:
+			self._listenDisconnectSocketCallback(socket)
+
+	def _removeSocketFromRoom(self, room, socket):
+		player = room.getPlayer(socket)
+		
+		if player:
+			room.removePlayer(socket)
+
+			print(f'O jogador {player.nickname} saiu da sala \'{room.name}\'.')
+
+			if socket is self.socket:
+				self._initSharedGameData()
+
+			if room.owner is socket and len(room.players) > 0:
+				room.owner = room.players[0].socket
+
+			if len(room.players) == 0:
+				del self._rooms[room.id]
+
+	def _removeSocketFromRooms(self, socket):
+		self._removePlayerFromRoomLock.acquire()
+		
+		for room in self._rooms.values():
+			if room.getPlayer(socket):
+				self._removeSocketFromRoom(room, socket)
+				break
+
+		self._removePlayerFromRoomLock.release()
 
 	def _sendPacketRequest(self, packet, toSocket=None):
 		self._sendPacket(packet, toSocket)
@@ -662,6 +694,8 @@ class GameClient(Thread):
 
 		return len(fullGroup) - len(totalDisaprovation) < totalNeeded
 
+def startThread(target, *args):
+	Thread(target=target, args=args, daemon=True).start()
 
 if __name__ == '__main__':
 	interfaces = getAllIpAddress()

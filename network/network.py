@@ -29,6 +29,7 @@ class Network(Thread):
 		self._listenThreads = {}
 
 		self._listenPacketCallback = None
+		self._disconnectSocketCallback = None
 
 	@property
 	def socket(self):
@@ -50,6 +51,15 @@ class Network(Thread):
 
 	def setListenPacketCallback(self, listenCallback):
 		self._listenPacketCallback = listenCallback
+
+	def removeListenPacketCallback(self):
+		self._listenPacketCallback = None		
+
+	def setDisconnectCallback(self, callback):
+		self._disconnectSocketCallback = callback
+
+	def removeDisconnectCallback(self):
+		self._disconnectSocketCallback = None
 
 	def blockUntilConnectToNetwork(self):
 		self._blockUntilConnectToNetwork.wait()
@@ -158,6 +168,8 @@ class Network(Thread):
 		del self._connections[socket.ip]
 		del self._listenThreads[socket.ip]
 		print(f'Desconectado de {socket}')
+		if self._disconnectSocketCallback:
+			self._disconnectSocketCallback(socket)
 
 	def _sendPacketToPeer(self, socket, packet):
 		if socket is self.socket:

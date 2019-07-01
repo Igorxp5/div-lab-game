@@ -22,6 +22,9 @@ from importlib import reload
 
 import _game_controller_test
 
+def startThread(target, *args):
+	Thread(target=target, args=args, daemon=True).start()
+
 class GameActionError(RuntimeError):
 	def __init__(self, actionError):
 		self.actionError = actionError
@@ -36,7 +39,7 @@ class SharedGameData(JsonSerializable):
 
 		self.chosenWords 			= []
 		self.masterRoomVotes 		= {}
-		self.electingOut 	= {}
+		self.electingOut 			= {}
 		self.contestAnswerVotes 	= {}
 		self.roundAnswers 			= {}
 		
@@ -58,7 +61,7 @@ class SharedGameData(JsonSerializable):
 	def setGamePhase(self, gamePhase):
 		self.gamePhase = gamePhase
 		if self._changingGamePhaseCallback:
-			Thread(target=self._changingGamePhaseCallback, args=(gamePhase,)).start()
+			startThread(self._changingGamePhaseCallback, gamePhase)
 
 	def setChangingGamePhaseCallback(self, callback):
 		self._changingGamePhaseCallback = callback		
@@ -124,15 +127,15 @@ class SharedGameData(JsonSerializable):
 		return sharedGameData
 
 
-class Game(Thread):
+class GameClient(Thread):
 	DISCOVERY_PORT = CONFIG.DISCOVERY_PORT
 	TCP_SERVER_PORT = CONFIG.TCP_SERVER_PORT
 	PACKET_WAITING_APPROVATION_QUEUE_SIZE = 30
 
 	def __init__(self, address):
 		super().__init__(daemon=True)
-		self._discoveryAddress = address, Game.DISCOVERY_PORT
-		self._tcpAddress = address, Game.TCP_SERVER_PORT
+		self._discoveryAddress = address, GameClient.DISCOVERY_PORT
+		self._tcpAddress = address, GameClient.TCP_SERVER_PORT
 
 		self._network = Network(self._discoveryAddress, self._tcpAddress)
 		self._network.setListenPacketCallback(self._listenPacketCallback)
@@ -270,11 +273,41 @@ class Game(Thread):
 	def getSocket(self, ip):
 		return self._network.allNetwork.get(ip, None)
 
+	def getListRooms(self):
+		return self._rooms
+
 	def getRoom(self, roomId):
 		return self._rooms.get(roomId, None)
 
 	def getCurrentRoom(self):
 		return self._sharedGameData.room
+
+	def getGamePhase(self):
+		return self._sharedGameData.gamePhase
+
+	def getPhaseTime(self):
+		return self._sharedGameData.phaseTime
+
+	def getRoundNumber(self):
+		return self._sharedGameData.roundNumber
+
+	def getRoundWord(self):
+		return self._sharedGameData.roundWord
+
+	def getElectingPlayers(self):
+		if (self.getCurrentRoom() and 
+				(self.getCurrentRoom().status == GamePhase.ELECTING_ROUND_MASTER or
+				self.getCurrentRoom().status == GamePhase.RELECTING_ROUND_MASTER)):
+			room = self.getCurrentRoom()
+			roomPlayers = room.players
+			return [p for p in roomPlayers if p.socket.ip not in self._sharedGameData.electingOut]
+		return None
+
+	def getMasterRoomVotes(self):
+		room = self.getCurrentRoom()
+		if room:
+			return {room.getPlayer(self.getSocket(ip)): voterPlayer for ip, voterPlayer in self._sharedGameData.masterRoomVotes.items()}
+		return None
 
 	def isRoomMaster(self):
 		return self._sharedGameData.room and self._sharedGameData.room.owner is self.socket
@@ -422,7 +455,7 @@ class Game(Thread):
 
 		else:
 			self._sharedGameData.roundMaster = moreVotesPlayers[0]
-			self._roomPrint(f'Eleição - \'{self._sharedGameData.roundMaster.nickname}\' venceu a eleição de organizador da rodada.')
+			self._roomPrint(f'Eleição - \'{self._sharedGameData.roundMaster.nickname}\' venceu a eleição de Organizador da Rodada.')
 
 			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 			self._sharedGameData.setGamePhase(GamePhase.CHOOSING_ROUND_WORD)
@@ -533,10 +566,10 @@ class Game(Thread):
 			requestSocket = packetWaiter['request_socket']
 			requestPacket = packetWaiter['request_packet']
 			responses = packetWaiter['responses']
-			Thread(
-				target=self._packetApprovedCallback, 
-				args=(requestSocket, requestPacket, responses)
-			).start()
+			startThread(
+				self._packetApprovedCallback, 
+				requestSocket, requestPacket, responses
+			)
 
 		if isPacketApproved or isPacketDisapproved:
 			self._donePacketHandler.add(packet.uuid)
@@ -627,8 +660,7 @@ class Game(Thread):
 		totalNeeded, fullGroup = self._approvationRequirement(socket, packet)
 		totalDisaprovation = {socket for socket in disagreementsList if socket in fullGroup}
 
-		return len(fullGroup) - len(totalDisaprovation) < totalNeeded 
-
+		return len(fullGroup) - len(totalDisaprovation) < totalNeeded
 
 
 if __name__ == '__main__':
@@ -637,7 +669,7 @@ if __name__ == '__main__':
 	for i, ip in enumerate(interfaces):
 		print(f'{i} - {ip}')
 	number_interface = int(input('\nSelecione a interface: '))
-	game = Game(interfaces[number_interface])
+	game = GameClient(interfaces[number_interface])
 	game.start()
 
 	while True: pass

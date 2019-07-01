@@ -253,6 +253,21 @@ class GameClient(Thread):
 		packet = PacketRequest(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
 		self._sendPacketRequest(packet)
 
+	def chooseRoundWord(self, wordString, wordDivision):
+		word = Word(wordString, wordDivision, True)
+
+		params = {
+			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
+			ActionParam.WORD_STRING: word.wordStr,
+			ActionParam.WORD_DIVISION: word.syllables
+		}
+
+		self._raiseActionIfNotCondictions(Action.CHOOSE_ROUND_WORD, params)
+
+		packet = PacketRequest(Action.CHOOSE_ROUND_WORD, params)
+		self._sendPacketRequest(packet)
+		return word
+
 	def getSocket(self, ip):
 		return self._network.allNetwork.get(ip, None)
 
@@ -270,6 +285,9 @@ class GameClient(Thread):
 
 	def getPhaseTime(self):
 		return self._sharedGameData.phaseTime
+
+	def getRoundMaster(self):
+		return self._sharedGameData.roundMaster
 
 	def getRoundNumber(self):
 		return self._sharedGameData.roundNumber
@@ -331,6 +349,7 @@ class GameClient(Thread):
 			Action.QUIT_ROOM: self._quitRoomCallback,
 			Action.START_ROOM_GAME: self._startGameCallback,
 			Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER: self._chooseVoteElectionRoundMasterCallback,
+			Action.CHOOSE_ROUND_WORD: self._chooseRoundWordCallback
 		}
 		for action, callback in defaultListPacketCallbacks.items():
 			self._listenPacketCallbackByAction[action].append(callback)
@@ -457,17 +476,48 @@ class GameClient(Thread):
 			self._sharedGameData.setGamePhase(GamePhase.CHOOSING_ROUND_WORD)
 			self._sharedGameData.electingOut = {}
 
+			Countdown(
+				CONFIG.TIME_PHASE, self._chooseRoundWordTimeIsUpCallback, daemon=True
+			).start()
+
 		self._sharedGameData.masterRoomVotes = {}
 
+	def _chooseRoundWordTimeIsUpCallback(self):
+		if not self._sharedGameData.roundWord:
+			self._sharedGameData.roundMaster.status = ELIMINATED
+			self._nextRound()
 
 	def _chooseVoteElectionRoundMasterCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
-			playerSocket = room.getPlayer(socket) 
+			playerSocket = room.getPlayer(socket)
 			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
 			self._sharedGameData.masterRoomVotes[socket.ip] = chosenPlayer
 
 			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
+
+	def _chooseRoundWordCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+			word = Word(params[ActionParam.WORD_STRING], params[ActionParam.WORD_DIVISION])
+			self._sharedGameData.roundWord = word
+			self._sharedGameData.chosenWords.append({'player': playerSocket, 'word': word})
+
+			self._roomPrint(f'{playerSocket.nickname} escolhou a palavra da rodada: {word.wordStr}.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.WAITING_ANSWERS)
+
+			Countdown(
+				CONFIG.TIME_PHASE, self._answerRoundWordTimeIsUpCallback, daemon=True
+			).start()
+
+	def _answerRoundWordTimeIsUpCallback(self):
+		pass
+
+	def _nextRound(self):
+		pass
 
 	def _getMoreVotesPlayers(self, electionVotes):
 		votesByPlayer = {player.socket.ip: [player, 0] for player in self.getCurrentRoom().players}

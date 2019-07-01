@@ -140,7 +140,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_IS_NOT_OWNER
 	)
 	PLAYER_IS_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (game and game.roundMaster and game.roundMaster.socket.ip is socket)
+		ActionError.NONE if (game and game.roundMaster and game.roundMaster.socket is socket)
 		else ActionError.PLAYER_IS_NOT_ROUND_MASTER
 	)
 	PLAYER_IS_NOT_ROUND_MASTER = lambda network, socket, rooms, game, params: (
@@ -247,7 +247,7 @@ class Action(Enum):
 					   ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	CHOOSE_ROUND_WORD = (4, 'Choose Round Word', ActionRw.WRITE,
-						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING), 
+						 (ActionParam.ROOM_ID, ActionParam.WORD_STRING, ActionParam.WORD_DIVISION),
 						 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
 						 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_NOT_IS_UP), 
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)

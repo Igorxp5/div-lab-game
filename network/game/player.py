@@ -5,18 +5,18 @@ from enum import Enum
 from utils.data_structure import JsonSerializable
 
 class PlayerStatus(JsonSerializable, Enum):
-    ON_HOLD                                             = 0
-    WATCHING                                            = 1
-    VOTING_ON_THE_ROUND_ORGANIZER                       = 2
-    AWAITING_THE_END_OF_ORGANIZER_VOTE                  = 3
-    CHOOSING_THE_WORD_OF_THE_ROUND                      = 4
-    OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND = 5
-    RESPONDING_TO_SILABIC_DIVISION                      = 6
-    AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE      = 7
-    VOTING_IN_CONTEST_OF_THE_CORRECT_WORD               = 8
-    AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST       = 9
-    WAITING_FOR_NEXT_ROUND                              = 10
-    ELIMINATED                                          = 11
+    ON_HOLD                                             = 'Aguardando começar o jogo'
+    WATCHING                                            = 'Assistindo'
+    VOTING_ON_THE_ROUND_ORGANIZER                       = 'Votando para Organizador da Rodada'
+    AWAITING_THE_END_OF_ORGANIZER_VOTE                  = 'Esperando Fim da Votação do Organizador da Rodada'
+    CHOOSING_THE_WORD_OF_THE_ROUND                      = 'Escolhendo Palavra da Rodada'
+    OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND = 'Aguardando Escolha da Palavra da Rodada'
+    RESPONDING_TO_SILABIC_DIVISION                      = 'Respondendo Divisão Silábica'
+    AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE      = 'Aguardando Fim da Fase Divisão Silábica'
+    VOTING_IN_CONTEST_OF_THE_CORRECT_WORD               = 'Votando na Contestação de Resposta Correta'
+    AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST       = 'Aguardando Fim da Contestação de Resposta Correta'
+    WAITING_FOR_NEXT_ROUND                              = 'Aguardando Fim da Rodada'
+    ELIMINATED                                          = 'Eliminado'
 
     def __repr__(self):
         return f'{self.__class__.__name__}.{self.name}'

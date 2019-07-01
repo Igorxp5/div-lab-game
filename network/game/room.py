@@ -32,6 +32,7 @@ class GamePhase(JsonSerializable, Enum):
     WAITING_CONTESTS = 'Aguardando Contestações'
     ELECTING_CORRECT_ANSWER = 'Eleição da Resposta Correta'
     RESULT_ROUND = 'Resultado da Rodada'
+    FINISHED = 'Fim do Jogo'
 
     def __repr__(self):
         return f'{self.__class__.__name__}.{self.name}'

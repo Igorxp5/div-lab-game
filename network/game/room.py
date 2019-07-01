@@ -29,6 +29,7 @@ class GamePhase(JsonSerializable, Enum):
     RELECTING_ROUND_MASTER = 'Releição do Organizador da Rodada'
     CHOOSING_ROUND_WORD = 'Escolha da Palavra da Rodada'
     WAITING_ANSWERS = 'Aguardando Respostas dos Jogadores'
+    WAITING_CORRECT_ANSWER = 'Aguardando Resposta do Organizador da Rodada'
     WAITING_CONTESTS = 'Aguardando Contestações'
     ELECTING_CORRECT_ANSWER = 'Eleição da Resposta Correta'
     RESULT_ROUND = 'Resultado da Rodada'

@@ -21,7 +21,7 @@ class Word(JsonSerializable):
 
     @property
     def syllables(self):
-        return self._syllables if not self.hashSyllables else Word._hashStr(self._syllables)
+        return self._syllables if not self.hashSyllables else Word.hashStr(self._syllables)
     
     def setWordStr(self, wordStr):
         self.wordStr = wordStr
@@ -34,6 +34,9 @@ class Word(JsonSerializable):
 
     def getSyllables(self):
         return self.syllables
+
+    def getNoHashSyllables(self):
+        return self._syllables
 
     def _dictKeyProperty(self):
         return {
@@ -48,6 +51,6 @@ class Word(JsonSerializable):
         return Word(wordStr, syllables)
 
     @staticmethod
-    def _hashStr(string):
+    def hashStr(string):
         encodedSyllables = string.encode(Word.ENCODING)
         return hashlib.sha1(encodedSyllables).hexdigest()

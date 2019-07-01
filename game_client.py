@@ -455,16 +455,9 @@ class GameClient(Thread):
 			room = self.getRoom(params[ActionParam.ROOM_ID])
 			room.status = RoomStatus.IN_GAME
 			if room.isPlayerInRoom(self.socket):
-				self._sharedGameData.roundNumber = 1
-				self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-
-				self._sharedGameData.setGamePhase(GamePhase.ELECTING_ROUND_MASTER)
-
 				print(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
 
-				Countdown(
-					CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
-				).start()
+				self._nextRound()
 
 	def _changingGamePhaseCallback(self, gamePhase):
 		self._roomPrint(f'Fase - {gamePhase}')
@@ -534,10 +527,26 @@ class GameClient(Thread):
 			).start()
 
 	def _answerRoundWordTimeIsUpCallback(self):
-		pass
+		pass			
 
 	def _nextRound(self):
-		pass
+		self._sharedGameData.roundNumber 			+= 1
+
+		self._sharedGameData.roundWord 				= None
+		self._sharedGameData.chosenWords 			= []
+		self._sharedGameData.masterRoomVotes 		= {}
+		self._sharedGameData.electingOut 			= {}
+		self._sharedGameData.contestAnswerVotes 	= {}
+		self._sharedGameData.roundAnswers 			= {}
+
+		self._roomPrint(f'Rodada {self.getRoundNumber()}')
+
+		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+		self._sharedGameData.setGamePhase(GamePhase.ELECTING_ROUND_MASTER)
+
+		Countdown(
+			CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
+		).start()
 
 	def _getMoreVotesPlayers(self, electionVotes):
 		votesByPlayer = {player.socket.ip: [player, 0] for player in self.getCurrentRoom().players}

@@ -589,12 +589,7 @@ class GameClient(Thread):
 
 	def _watingContestTimeIsUpCallback(self):
 		if self.getGamePhase() == GamePhase.WAITING_CONTESTS:
-			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.RESULT_ROUND)
-
-			Countdown(
-				CONFIG.TIME_PHASE, self._nextRound, daemon=True
-			).start()
+			self._goToResultPhase()
 
 	def _nextRound(self):
 		self._sharedGameData.roundNumber 			+= 1
@@ -614,6 +609,26 @@ class GameClient(Thread):
 		Countdown(
 			CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
 		).start()
+
+	def _goToResultPhase(self):
+		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+		self._sharedGameData.setGamePhase(GamePhase.RESULT_ROUND)
+
+		if self._hasNotEliminatedPlayers():
+			Countdown(
+				CONFIG.TIME_PHASE, self._nextRound, daemon=True
+			).start()
+		else:
+			self._sharedGameData.setGamePhase(GamePhase.FINISHED)
+
+	def _hasNotEliminatedPlayers(self):
+		room = self.getCurrentRoom()
+		roomPlayers = room.players
+
+		for player in roomPlayers:
+			if player.status not in (PlayerStatus.ELIMINATED, PlayerStatus.WATCHING):
+				return True
+		return False
 
 	def _getMoreVotesPlayers(self, electionVotes):
 		votesByPlayer = {player.socket.ip: [player, 0] for player in self.getCurrentRoom().players}
@@ -652,6 +667,10 @@ class GameClient(Thread):
 
 			if room.owner is socket and len(room.players) > 0:
 				room.owner = room.players[0].socket
+
+			if (room.status == RoomStatus.IN_GAME and room.isPlayerInRoom(self.socket)
+					and len(room.players) == 1):
+				self._goToResultPhase()
 
 			if len(room.players) == 0:
 				del self._rooms[room.id]

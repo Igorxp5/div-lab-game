@@ -59,9 +59,29 @@ class SharedGameData(JsonSerializable):
 		self.gamePhase = gamePhase
 		if self._changingGamePhaseCallback:
 			startThread(self._changingGamePhaseCallback, gamePhase)
+		self._setRoomPlayersStatus(gamePhase)
 
 	def setChangingGamePhaseCallback(self, callback):
-		self._changingGamePhaseCallback = callback		
+		self._changingGamePhaseCallback = callback
+
+	def _setRoomPlayersStatus(self, gamePhase):
+		room = self.getCurrentRoom()
+		roomPlayers = room.players
+		for player in roomPlayers:
+			if gamePhase in (GamePhase.ELECTING_ROUND_MASTER, GamePhase.RELECTING_ROUND_MASTER):
+				player.status = PlayerStatus.VOTING_ON_THE_ROUND_ORGANIZER
+			elif gamePhase == GamePhase.CHOOSING_ROUND_WORD:
+				if player is self._sharedGameData.roundMaster:
+					player.status = PlayerStatus.CHOOSING_THE_WORD_OF_THE_ROUND
+				else:
+					player.status = PlayerStatus.OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND
+			elif gamePhase == GamePhase.WAITING_ANSWERS:
+				if player is self._sharedGameData.roundMaster:
+					player.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
+				else:
+					player.status = PlayerStatus.RESPONDING_TO_SILABIC_DIVISION
+			elif gamePhase == GamePhase.WAITING_CONTESTS:
+				pass
 
 	def _dictKeyProperty(self):
 		return {
@@ -493,7 +513,7 @@ class GameClient(Thread):
 			playerSocket = room.getPlayer(socket)
 			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
 			self._sharedGameData.masterRoomVotes[socket.ip] = chosenPlayer
-
+			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_ORGANIZER_VOTE
 			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
 
 	def _chooseRoundWordCallback(self, socket, params, actionError):

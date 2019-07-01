@@ -1,14 +1,66 @@
+import json
+import uuid
+
 from enum import Enum
 
-class Room:
+from .player import Player, PlayerStatus
+
+from utils.data_structure import JsonSerializable
+
+class RoomStatus(JsonSerializable, Enum):
+    IN_GAME = 1
+    ON_HOLD = 2
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}.{self.name}'
+
+    def _basicValue(self):
+        return self.value
+
+    @staticmethod
+    def getByValue(value):
+        for action in RoomStatus:
+            if value == action.value:
+                return action
+        raise NotImplementedError
+
+class GamePhase(JsonSerializable, Enum):
+    ELECTING_ROUND_MASTER = 'Eleição do Organizador da Rodada'
+    RELECTING_ROUND_MASTER = 'Releição do Organizador da Rodada'
+    CHOOSING_ROUND_WORD = 'Escolha da Palavra da Rodada'
+    WAITING_ANSWERS = 'Aguardando Respostas dos Jogadores'
+    WAITING_CONTESTS = 'Aguardando Contestações'
+    ELECTING_CORRECT_ANSWER = 'Eleição da Resposta Correta'
+    RESULT_ROUND = 'Resultado da Rodada'
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}.{self.name}'
+
+    def __str__(self):
+        return self.value
+
+    def _basicValue(self):
+        return self.value
+
+    @staticmethod
+    def getByValue(value):
+        for action in RoomStatus:
+            if value == action.value:
+                return action
+        raise NotImplementedError
+
+class Room(JsonSerializable):
     
-    def __init__(self, id, name, limitPlayers, owner, players, status):
-        self.id             = id
+    def __init__(self, id_, name, limitPlayers, owner, players, status):
+        self.id             = id_
         self.name           = name
         self.limitPlayers   = limitPlayers
         self.owner          = owner
         self.players        = players
         self.status         = status
+
+    def __repr__(self):
+        return repr(self.toJsonDict())
 
     def setId(self, id):
         self.id = id
@@ -46,14 +98,54 @@ class Room:
     def getStatus(self):
         return self.status
 
-class RoomStatus(Enum):
-    IN_GAME = 1
-    ON_HOLD = 2
+    def getPlayer(self, socket):
+        for player in self.players:
+            if player.socket is socket:
+                return player
+        return None
 
-class GamePhase(Enum):
-    ELECTING_MASTER_ROOM = 1
-    CHOOSING_ROUND_WORD = 2
-    WAITING_ANSWERS = 3
-    WAITING_CONTESTS = 4
-    ELECTING_CORRECT_ANSWER = 5
-    RESULT_ROUND = 6
+    def isPlayerInRoom(self, socket):
+        return self.getPlayer(socket) is not None
+
+    def playerNameInRoom(self, playerName):
+        for player in self.players:
+            if player.nickname == playerName:
+                return True
+        return False
+
+    def joinPlayer(self, socket, nickname):
+        player = Player(nickname, socket, PlayerStatus.ON_HOLD)
+        self.players.append(player)
+        return player
+
+    def removePlayer(self, socket):
+        player = [p for p in self.players if p.socket is socket][0]
+        self.players.remove(player)
+
+    def _dictKeyProperty(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'limitPlayers': self.limitPlayers,
+            'owner': self.owner,
+            'players': self.players,
+            'status': self.status
+        }
+
+    @staticmethod
+    def createRoom(name, limitPlayers, owner):
+        id_ = str(uuid.uuid1())
+        players = []
+        status = RoomStatus.ON_HOLD
+        return Room(id_, name, limitPlayers, owner, players, status)
+
+    @staticmethod
+    def _parseJson(jsonDict, sockets):
+        id_ = jsonDict['id']
+        name = jsonDict['name']
+        limitPlayers = jsonDict['limitPlayers']
+        owner = sockets[jsonDict['owner']]
+        players = jsonDict['players']
+        players = [Player.parseJson(json.dumps(player), sockets) for player in players]
+        status = RoomStatus.getByValue(jsonDict['status'])
+        return Room(id_, name, limitPlayers, owner, players, status)

@@ -569,6 +569,13 @@ class GameClient(Thread):
 					else:
 						self._roomPrint(f'{player.nickname} respondeu corretamente divisão silábica.')
 
+		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+		self._sharedGameData.setGamePhase(GamePhase.WAITING_CONTESTS)
+
+		Countdown(
+			CONFIG.TIME_PHASE, self._watingContestTimeIsUpCallback, daemon=True
+		).start()
+
 
 	def _answerRoundWordCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -579,6 +586,15 @@ class GameClient(Thread):
 			self._sharedGameData.roundAnswers[socket.ip] = word
 			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
 			self._roomPrint(f'\'{playerSocket.nickname}\' respondeu a divisão silábica.')
+
+	def _watingContestTimeIsUpCallback(self):
+		if self.getGamePhase() == GamePhase.WAITING_CONTESTS:
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.RESULT_ROUND)
+
+			Countdown(
+				CONFIG.TIME_PHASE, self._nextRound, daemon=True
+			).start()
 
 	def _nextRound(self):
 		self._sharedGameData.roundNumber 			+= 1

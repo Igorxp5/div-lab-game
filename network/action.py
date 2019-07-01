@@ -75,7 +75,7 @@ class ActionError(Enum):
 	PLAYER_NOT_MISSED_ANSWER = (15, 'O jogador não errou a palavra.')
 	PLAYER_CANT_BE_OWNER = (16, 'O jogador não é elegível a dono da sala.')
 	PLAYER_IS_A_OWNER = (17, 'O jogador já é dono de uma sala.')
-	MIN_PLAYERS_TO_START = (18, f'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}')
+	MIN_PLAYERS_TO_START = (18, f'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}.')
 	GAME_NOT_ELECTING_ROUND_MASTER = (19, 'O jogo não se encontra na rodada de eleição de organizador da rodada.')
 	PLAYER_IS_OUT_ELECTING = (20, 'O jogador não pode ser escolhido, ele está fora da eleição.')
 	ROOM_IN_GAME = (21, 'A sala já está em jogo.')
@@ -209,6 +209,14 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (len(rooms[params[ActionParam.ROOM_ID]].players) >= CONFIG.MIN_PLAYERS_TO_START)
 		else ActionError.MIN_PLAYERS_TO_START
 	)
+	ROOM_IS_NOT_FULL = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (len(rooms[params[ActionParam.ROOM_ID]].players) < rooms[params[ActionParam.ROOM_ID]].limitPlayers)
+		else ActionError.ROOM_IS_FULL
+	)
+	MIN_PLAYERS_TO_CREATE_ROOM = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (params[ActionParam.PLAYERS_LIMIT] >= CONFIG.MIN_PLAYERS_TO_START)
+		else ActionError.MIN_PLAYERS_TO_START
+	)
 
 	def __repr__(self):
 		return f'{self.__class__.__name__}.{self.name}'
@@ -221,13 +229,15 @@ class Action(Enum):
 	CREATE_ROOM = (1, 'Create Room', ActionRw.WRITE, 
 				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, 
 				   	ActionParam.PLAYERS_LIMIT, ActionParam.PLAYER_NAME), 
-				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_A_ROOM), 
+				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_A_ROOM,
+				   	ActionCondiction.MIN_PLAYERS_TO_CREATE_ROOM), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 
 					  (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_A_ROOM, 
-					  	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.PLAYER_NAME_IS_VALID), 
+					  	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.ROOM_IS_NOT_FULL,
+					  	ActionCondiction.PLAYER_NAME_IS_VALID), 
 					  ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 

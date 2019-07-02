@@ -34,17 +34,23 @@ class SharedGameData(JsonSerializable):
 		self.roundWord 				= None
 		self.gamePhase 				= None
 
+		# Variavel temporária para guardar a palavra da rodada enviada pelo RoundMaster
+		self.wantedRoundWord 		= None 
+
 		self.chosenWords 			= []
 		self.roundMasterVotes 		= {}
 		self.electingOut 			= {}
 		self.contestAnswerVotes 	= {}
 		self.roundAnswers 			= {}
+		self.contestingPlayer 		= None
 		
 		self.roundNumber 			= 0
 		self._phaseTimeStart 		= None
 		self._phaseTimeDesired  	= 0
 
 		self._changingGamePhaseCallback = None
+
+		self._countdowns = {}
 
 	@property
 	def phaseTime(self):
@@ -68,20 +74,21 @@ class SharedGameData(JsonSerializable):
 		room = self.room
 		roomPlayers = room.players
 		for player in roomPlayers:
-			if gamePhase in (GamePhase.ELECTING_ROUND_MASTER, GamePhase.RELECTING_ROUND_MASTER):
-				player.status = PlayerStatus.VOTING_ON_THE_ROUND_ORGANIZER
-			elif gamePhase == GamePhase.CHOOSING_ROUND_WORD:
-				if player is self.roundMaster:
-					player.status = PlayerStatus.CHOOSING_THE_WORD_OF_THE_ROUND
-				else:
-					player.status = PlayerStatus.OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND
-			elif gamePhase == GamePhase.WAITING_ANSWERS:
-				if player is self.roundMaster:
-					player.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
-				else:
-					player.status = PlayerStatus.RESPONDING_TO_SILABIC_DIVISION
-			elif gamePhase == GamePhase.WAITING_CONTESTS:
-				pass
+			if player.status in (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED):
+				if gamePhase in (GamePhase.ELECTING_ROUND_MASTER, GamePhase.RELECTING_ROUND_MASTER):
+					player.status = PlayerStatus.VOTING_ON_THE_ROUND_ORGANIZER
+				elif gamePhase == GamePhase.CHOOSING_ROUND_WORD:
+					if player is self.roundMaster:
+						player.status = PlayerStatus.CHOOSING_THE_WORD_OF_THE_ROUND
+					else:
+						player.status = PlayerStatus.OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND
+				elif gamePhase == GamePhase.WAITING_ANSWERS:
+					if player is self.roundMaster:
+						player.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
+					else:
+						player.status = PlayerStatus.RESPONDING_TO_SILABIC_DIVISION
+				elif gamePhase == GamePhase.WAITING_CONTESTS:
+					pass
 
 	def _dictKeyProperty(self):
 		return {
@@ -244,7 +251,7 @@ class GameClient(Thread):
 
 	def quitRoom(self):
 		params = {
-			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
 		}
 
 		self._raiseActionIfNotCondictions(Action.QUIT_ROOM, params)
@@ -254,7 +261,7 @@ class GameClient(Thread):
 
 	def startGame(self):
 		params = {
-			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
 		}
 
 		self._raiseActionIfNotCondictions(Action.START_ROOM_GAME, params)
@@ -262,10 +269,10 @@ class GameClient(Thread):
 		packet = PacketRequest(Action.START_ROOM_GAME, params)
 		self._sendPacketRequest(packet)
 
-	def voteRoomMaster(self, voteSocket):
+	def voteRoundMaster(self, votePlayer):
 		params = {
-			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
-			ActionParam.SOCKET_IP: voteSocket.ip,
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.SOCKET_IP: votePlayer.socket.ip,
 		}
 		
 		self._raiseActionIfNotCondictions(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
@@ -277,7 +284,7 @@ class GameClient(Thread):
 		word = Word(wordString, wordDivision, True)
 
 		params = {
-			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
 			ActionParam.WORD_STRING: word.wordStr,
 			ActionParam.WORD_DIVISION: word.syllables
 		}
@@ -286,6 +293,7 @@ class GameClient(Thread):
 
 		packet = PacketRequest(Action.CHOOSE_ROUND_WORD, params)
 		self._sendPacketRequest(packet)
+		self._sharedGameData.wantedRoundWord = word
 		return word
 
 	def answerRoundWord(self, wordDivision):
@@ -293,7 +301,7 @@ class GameClient(Thread):
 		answerWord = Word(getattr(roundWord, 'wordStr', ''), wordDivision, True)
 
 		params = {
-			ActionParam.ROOM_ID: getattr(self._sharedGameData.room, 'id', None),
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
 			ActionParam.WORD_DIVISION: answerWord.syllables
 		}
 
@@ -303,11 +311,20 @@ class GameClient(Thread):
 		self._sendPacketRequest(packet)
 		return answerWord
 
+	def contestCorrectAnswer(self):
+		params = {
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None)
+		}
+
+		self._raiseActionIfNotCondictions(Action.CONTEST_WORD, params)
+
+		packet = PacketRequest(Action.CONTEST_WORD, params)
+		self._sendPacketRequest(packet)
 
 	def getSocket(self, ip):
 		return self._network.allNetwork.get(ip, None)
 
-	def getListRooms(self):
+	def getAvailableRooms(self):
 		return self._rooms
 
 	def getRoom(self, roomId):
@@ -331,6 +348,9 @@ class GameClient(Thread):
 	def getRoundMaster(self):
 		return self._sharedGameData.roundMaster
 
+	def getContestingPlayer(self):
+		return self._sharedGameData.contestingPlayer
+
 	def getRoundNumber(self):
 		return self._sharedGameData.roundNumber
 
@@ -352,7 +372,7 @@ class GameClient(Thread):
 			return {room.getPlayer(self.getSocket(ip)): voterPlayer for ip, voterPlayer in self._sharedGameData.roundMasterVotes.items()}
 		return None
 
-	def isRoomMaster(self):
+	def isRoundMaster(self):
 		return self._sharedGameData.room and self._sharedGameData.room.owner is self.socket
 
 	def setListenPacketCallbackByAction(self, action, callback):
@@ -392,7 +412,9 @@ class GameClient(Thread):
 			Action.START_ROOM_GAME: self._startGameCallback,
 			Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER: self._chooseVoteElectionRoundMasterCallback,
 			Action.CHOOSE_ROUND_WORD: self._chooseRoundWordCallback,
-			Action.SEND_PLAYER_ANSWER: self._answerRoundWordCallback
+			Action.SEND_PLAYER_ANSWER: self._answerRoundWordCallback,
+			Action.CONTEST_WORD: self._contestAnswerWordCallback,
+			Action.SEND_MASTER_ANSWER: self._correctAnswerCallback
 		}
 		for action, callback in defaultListPacketCallbacks.items():
 			self._listenPacketCallbackByAction[action].append(callback)
@@ -482,115 +504,6 @@ class GameClient(Thread):
 
 				self._nextRound()
 
-	def _changingGamePhaseCallback(self, gamePhase):
-		self._roomPrint(f'Fase - {gamePhase}')
-		if self._listenChangingGamePhaseCallback:
-			self._listenChangingGamePhaseCallback(gamePhase)
-
-	def _electingMasterRoomPhaseTimeIsUpCallback(self):
-		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.roundMasterVotes)
-
-		if len(moreVotesPlayers) > 1:
-			for player in self._sharedGameData.room.players:
-				if player not in moreVotesPlayers:
-					self._sharedGameData.electingOut[player.socket.ip] = player
-				if player.socket.ip not in self._sharedGameData.roundMasterVotes:
-					self._roomPrint(f'{player.nickname} não votou. Seu voto foi anulado.')
-
-			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.RELECTING_ROUND_MASTER)
-
-			playersNickname = [player.nickname for player in moreVotesPlayers]
-			self._roomPrint(f'Eleição - Houveram empates. Ocorrerá outra rodada de votação com os jogadores: {", ".join(playersNickname)}.')
-
-			Countdown(
-				CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
-			).start()
-
-		else:
-			self._sharedGameData.roundMaster = moreVotesPlayers[0]
-			self._roomPrint(f'Eleição - \'{self._sharedGameData.roundMaster.nickname}\' venceu a eleição de Organizador da Rodada.')
-
-			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.CHOOSING_ROUND_WORD)
-			self._sharedGameData.electingOut = {}
-
-			Countdown(
-				CONFIG.TIME_PHASE, self._chooseRoundWordTimeIsUpCallback, daemon=True
-			).start()
-
-		self._sharedGameData.roundMasterVotes = {}
-
-	def _chooseRoundWordTimeIsUpCallback(self):
-		if not self._sharedGameData.roundWord:
-			self._sharedGameData.roundMaster.status = PlayerStatus.ELIMINATED
-			self._roomPrint(f'{self._sharedGameData.roundMaster.nickname} não escolheu a palavra da rodada e foi eliminado.')
-			self._nextRound()
-
-	def _chooseVoteElectionRoundMasterCallback(self, socket, params, actionError):
-		if actionError == ActionError.NONE:
-			room = self.getRoom(params[ActionParam.ROOM_ID])
-			playerSocket = room.getPlayer(socket)
-			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
-			self._sharedGameData.roundMasterVotes[socket.ip] = chosenPlayer
-			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_ORGANIZER_VOTE
-			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
-
-	def _chooseRoundWordCallback(self, socket, params, actionError):
-		if actionError == ActionError.NONE:
-			room = self.getRoom(params[ActionParam.ROOM_ID])
-			playerSocket = room.getPlayer(socket)
-			word = Word(params[ActionParam.WORD_STRING], params[ActionParam.WORD_DIVISION])
-			self._sharedGameData.roundWord = word
-			self._sharedGameData.chosenWords.append({'player': playerSocket, 'word': word})
-
-			self._roomPrint(f'{playerSocket.nickname} escolhou a palavra da rodada: {word.wordStr}.')
-
-			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.WAITING_ANSWERS)
-
-			Countdown(
-				CONFIG.TIME_PHASE, self._answerRoundWordTimeIsUpCallback, daemon=True
-			).start()
-
-	def _answerRoundWordTimeIsUpCallback(self):
-		room = self.getCurrentRoom()
-		roomPlayers = room.players
-		for player in roomPlayers:
-			if player is not self._sharedGameData.roundMaster:
-				if player.socket.ip not in self._sharedGameData.roundAnswers:
-					player.status = PlayerStatus.ELIMINATED
-					self._roomPrint(f'{player.nickname} foi eliminado por não responder a divisão silábica.')
-				else:
-					word = self._sharedGameData.roundAnswers[player.socket.ip]
-					if word != self._sharedGameData.roundWord:
-						player.status = PlayerStatus.ELIMINATED
-						self._roomPrint(f'{player.nickname} errou a divisão silábica e foi eliminado.')
-					else:
-						self._roomPrint(f'{player.nickname} respondeu corretamente divisão silábica.')
-
-		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-		self._sharedGameData.setGamePhase(GamePhase.WAITING_CONTESTS)
-
-		Countdown(
-			CONFIG.TIME_PHASE, self._watingContestTimeIsUpCallback, daemon=True
-		).start()
-
-
-	def _answerRoundWordCallback(self, socket, params, actionError):
-		if actionError == ActionError.NONE:
-			room = self.getRoom(params[ActionParam.ROOM_ID])
-			playerSocket = room.getPlayer(socket)
-			roundWord = self._sharedGameData.roundWord
-			word = Word(roundWord.wordStr, params[ActionParam.WORD_DIVISION])
-			self._sharedGameData.roundAnswers[socket.ip] = word
-			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
-			self._roomPrint(f'\'{playerSocket.nickname}\' respondeu a divisão silábica.')
-
-	def _watingContestTimeIsUpCallback(self):
-		if self.getGamePhase() == GamePhase.WAITING_CONTESTS:
-			self._goToResultPhase()
-
 	def _nextRound(self):
 		self._sharedGameData.roundNumber 			+= 1
 
@@ -606,9 +519,197 @@ class GameClient(Thread):
 		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 		self._sharedGameData.setGamePhase(GamePhase.ELECTING_ROUND_MASTER)
 
-		Countdown(
-			CONFIG.TIME_PHASE, self._electingMasterRoomPhaseTimeIsUpCallback, daemon=True
-		).start()
+		self._setCountdown(
+			GamePhase.ELECTING_ROUND_MASTER, CONFIG.TIME_PHASE, 
+			self._electingMasterRoomPhaseTimeIsUpCallback
+		)
+
+	def _changingGamePhaseCallback(self, gamePhase):
+		self._roomPrint(f'Fase - {gamePhase}')
+		if self._listenChangingGamePhaseCallback:
+			self._listenChangingGamePhaseCallback(gamePhase)
+
+	def _electingMasterRoomPhaseTimeIsUpCallback(self):
+		self._roomPrint('Acabou o tempo para votar no Organizador da Rodada')
+
+		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.roundMasterVotes)
+
+		if len(moreVotesPlayers) > 1:
+			for player in self._sharedGameData.room.players:
+				if player not in moreVotesPlayers:
+					self._sharedGameData.electingOut[player.socket.ip] = player
+				if player.socket.ip not in self._sharedGameData.roundMasterVotes:
+					self._roomPrint(f'\'{player.nickname}\' não votou. Seu voto foi anulado.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.RELECTING_ROUND_MASTER)
+
+			playersNickname = [player.nickname for player in moreVotesPlayers]
+			self._roomPrint(f'Eleição - Houveram empates. Ocorrerá outra rodada de votação com os jogadores: {", ".join(playersNickname)}.')
+
+			self._setCountdown(
+				GamePhase.RELECTING_ROUND_MASTER, CONFIG.TIME_PHASE, 
+				self._electingMasterRoomPhaseTimeIsUpCallback
+			)
+
+		else:
+			self._sharedGameData.roundMaster = moreVotesPlayers[0]
+			self._roomPrint(f'Eleição - \'{self._sharedGameData.roundMaster.nickname}\' venceu a eleição de Organizador da Rodada.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.CHOOSING_ROUND_WORD)
+			self._sharedGameData.electingOut = {}
+
+			self._setCountdown(
+				GamePhase.CHOOSING_ROUND_WORD, CONFIG.TIME_PHASE, 
+				self._chooseRoundWordTimeIsUpCallback
+			)
+
+		self._sharedGameData.roundMasterVotes = {}
+
+	def _chooseRoundWordTimeIsUpCallback(self):
+		if not self._sharedGameData.roundWord:
+			self._sharedGameData.roundMaster.status = PlayerStatus.ELIMINATED
+			self._roomPrint(f'\'{self._sharedGameData.roundMaster.nickname}\' não escolheu a palavra da rodada e foi eliminado.')
+			self._nextRound()
+
+	def _chooseVoteElectionRoundMasterCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
+			self._sharedGameData.roundMasterVotes[socket.ip] = chosenPlayer
+			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_ORGANIZER_VOTE
+			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
+
+			isAllPlayersVoted = self._isAllPlayersVoted(
+				self._sharedGameData.roundMasterVotes, 
+				{self.getRoundMaster().socket.ip} if self.getRoundMaster() else set()
+			)
+
+			if isAllPlayersVoted:
+				if self.getGamePhase() == GamePhase.ELECTING_ROUND_MASTER:
+					self._finishCountdown(GamePhase.ELECTING_ROUND_MASTER)
+				elif self.getGamePhase() == GamePhase.RELECTING_ROUND_MASTER:
+					self._finishCountdown(GamePhase.RELECTING_ROUND_MASTER)
+
+	def _isAllPlayersVoted(self, electionVote, exceptions):
+		for player in self.getCurrentRoom().players:
+			if (player.status not in (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED) and
+					player.socket.ip not in exceptions and 
+					player.socket.ip not in electionVote):
+				return False
+		return True
+
+	def _chooseRoundWordCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+			word = Word(params[ActionParam.WORD_STRING], params[ActionParam.WORD_DIVISION])
+			
+			if self.getCurrentPlayer() is self.getRoundMaster():
+				self._sharedGameData.roundWord = self._sharedGameData.wantedRoundWord
+				self._sharedGameData.wantedRoundWord = None
+				
+			else:
+				self._sharedGameData.roundWord = word
+			
+			self._sharedGameData.chosenWords.append({'player': playerSocket, 'word': word})
+
+			self._roomPrint(f'{playerSocket.nickname} escolhou a palavra da rodada: {word.wordStr}.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.WAITING_ANSWERS)
+
+			self._setCountdown(
+				GamePhase.WAITING_ANSWERS, CONFIG.TIME_PHASE, 
+				self._watingAnswersTimeIsUpCallback
+			)
+
+	def _watingAnswersTimeIsUpCallback(self):
+		self._roomPrint('Acabou o tempo para responder a Divisão Silábica.')
+
+		self._sharedGameData.setGamePhase(GamePhase.WAITING_CORRECT_ANSWER)
+
+		if self.getCurrentPlayer() is self.getRoundMaster():
+			self._sendCorrectAnswer()
+
+	def _sendCorrectAnswer(self):
+		params = {
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.WORD_DIVISION: self.getRoundWord().getNoHashSyllables()
+		}
+
+		self._raiseActionIfNotCondictions(Action.SEND_MASTER_ANSWER, params)
+
+		packet = PacketRequest(Action.SEND_MASTER_ANSWER, params)
+		self._sendPacketRequest(packet)
+
+	def _correctAnswerCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			wordDivision = params[ActionParam.WORD_DIVISION]
+			wordStr = self._sharedGameData.roundWord.wordStr
+			self._sharedGameData.roundWord = Word(wordStr, wordDivision)
+
+			self._roomPrint(f'A resposta correta era {wordDivision}')
+
+			room = self.getCurrentRoom()
+			roomPlayers = room.players
+			for player in roomPlayers:
+				if player is not self._sharedGameData.roundMaster:
+					if player.socket.ip not in self._sharedGameData.roundAnswers:
+						player.status = PlayerStatus.ELIMINATED
+						self._roomPrint(f'\'{player.nickname}\' foi eliminado por não responder a divisão silábica.')
+					else:
+						word = self._sharedGameData.roundAnswers[player.socket.ip]
+						if word != self._sharedGameData.roundWord:
+							player.status = PlayerStatus.ELIMINATED
+							self._roomPrint(f'\'{player.nickname}\' errou a divisão silábica e foi eliminado.')
+						else:
+							self._roomPrint(f'\'{player.nickname}\' respondeu corretamente divisão silábica.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.WAITING_CONTESTS)
+
+			self._setCountdown(
+				GamePhase.WAITING_CONTESTS, CONFIG.TIME_PHASE, 
+				self._watingContestTimeIsUpCallback
+			)
+
+	def _answerRoundWordCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+			roundWord = self._sharedGameData.roundWord
+			word = Word(roundWord.wordStr, params[ActionParam.WORD_DIVISION])
+			self._sharedGameData.roundAnswers[socket.ip] = word
+			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE
+			self._roomPrint(f'\'{playerSocket.nickname}\' respondeu a divisão silábica.')
+
+			isAllPlayersVoted = self._isAllPlayersVoted(
+				self._sharedGameData.roundAnswers,
+				{self.getRoundMaster().socket.ip}
+			)
+
+			if isAllPlayersVoted:
+					self._finishCountdown(GamePhase.WAITING_ANSWERS)
+
+
+	def _contestAnswerWordCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+
+			self._sharedGameData.contestingPlayer = playerSocket
+
+			self._roomPrint(f'\'{playerSocket.nickname}\' contestou a resposta correta.')
+
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.ELECTING_CORRECT_ANSWER)
+
+	def _watingContestTimeIsUpCallback(self):
+		if self.getGamePhase() == GamePhase.WAITING_CONTESTS:
+			self._goToResultPhase()
 
 	def _goToResultPhase(self):
 		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
@@ -645,6 +746,23 @@ class GameClient(Thread):
 
 		return totalVotes, playerByVotes[totalVotes]
 
+	def _setCountdown(self, id_, time, callback):
+		countdown = Countdown(
+			time, callback, daemon=True
+		)
+		self._sharedGameData._countdowns[id_] = countdown
+		countdown.start()
+
+	def _cancelCountdown(self, id_):
+		if id_ in self._sharedGameData._countdowns:
+			self._sharedGameData._countdowns[id_].cancel()
+			del self._sharedGameData._countdowns[id_]
+
+	def _finishCountdown(self, id_):
+		if id_ in self._sharedGameData._countdowns:
+			self._sharedGameData._countdowns[id_].finish()
+			del self._sharedGameData._countdowns[id_]
+
 	def _roomPrint(self, message):
 		print(f'Sala \'{self.getCurrentRoom().name}\': {message}')
 
@@ -660,7 +778,7 @@ class GameClient(Thread):
 		if player:
 			room.removePlayer(socket)
 
-			print(f'O jogador {player.nickname} saiu da sala \'{room.name}\'.')
+			print(f'O jogador \'{player.nickname}\' saiu da sala \'{room.name}\'.')
 
 			if socket is self.socket:
 				self._initSharedGameData()

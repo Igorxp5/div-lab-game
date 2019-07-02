@@ -2,6 +2,7 @@ import network.config as CONFIG
 
 from .game.room import RoomStatus, GamePhase
 from .game.player import PlayerStatus
+from .game.word import Word
 
 from enum import Enum
 
@@ -86,6 +87,8 @@ class ActionError(Enum):
 	PLAYER_ALREADY_CHOOSE_ROUND_WORD = (24, 'O jogador já escolheu a palavra da rodada.')
 	PLAYER_ALREADY_ANSWERED = (25, 'O jogador já respondeu a divisão silábica da rodada.')
 	PLAYER_IS_ELIMINATED = (26, 'O jogador já está eliminado da partida.')
+	PLAYER_IS_WATCHING = (27, 'O jogador é um espectador.')
+	INVALID_CONTESTING_VOTE = (28, 'Escolha um voto válido (correto, erraodo, abstenção).')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -174,6 +177,10 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (game and game.gamePhase is GamePhase.ELECTING_CORRECT_ANSWER)
 		else ActionError.GENERIC
 	)
+	GAME_IS_WAITING_CORRECT_ANSWER = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game and game.gamePhase is GamePhase.WAITING_CORRECT_ANSWER)
+		else ActionError.GENERIC
+	)
 	GAME_IS_WAITING_ANSWERS = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.WAITING_ANSWERS)
 		else ActionError.GENERIC
@@ -187,7 +194,7 @@ class ActionCondiction(Enum):
 		else ActionError.GENERIC
 	)
 	PLAYER_MISSED_ANSWER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (socket in game.roundAnswers and game.roundAnswers.get(socket.ip, None) == game.roundWord)
+		ActionError.NONE if (socket.ip in game.roundAnswers and game.roundAnswers[socket.ip] != game.roundWord)
 		else ActionError.PLAYER_NOT_MISSED_ANSWER
 	)
 	CHOSEN_PLAYER_IS_IN_ROOM = lambda network, socket, rooms, game, params: (
@@ -208,7 +215,7 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (
 			(game.roundMaster and game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
 			or (game.contestingPlayer and game.contestingPlayer.socket.ip == params[ActionParam.SOCKET_IP])
-		) else ActionError.GENERIC
+		) else ActionError.INVALID_CONTESTING_VOTE
 	)
 	PLAYER_CAN_BE_OWNER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].owner not in network.peers and 
@@ -244,6 +251,16 @@ class ActionCondiction(Enum):
 		ActionError.NONE if (game.room and 
 			game.room.getPlayer(socket).status not in (PlayerStatus.ELIMINATED, PlayerStatus.WATCHING))
 		else ActionError.PLAYER_IS_ELIMINATED
+	)
+	PLAYER_IS_NOT_WATCHING = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game.room and game.room.getPlayer(socket).status != PlayerStatus.WATCHING)
+		else ActionError.PLAYER_IS_WATCHING
+	)
+	WORD_IS_SAME_HASH = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (game.roundWord and (
+			(game.roundMaster.socket is socket and Word.hashStr(game.roundWord._syllables) == Word.hashStr(params[ActionParam.WORD_DIVISION])) or 
+			game.roundWord._syllables == Word.hashStr(params[ActionParam.WORD_DIVISION])))
+		else ActionError.PLAYER_IS_WATCHING
 	)
 
 	def __repr__(self):
@@ -301,7 +318,8 @@ class Action(Enum):
 										 	ActionCondiction.GAME_IS_ELECTING_ROUND_MASTER, ActionCondiction.TIME_NOT_IS_UP, 
 										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_ROUND_MASTER, 
 										 	ActionCondiction.PLAYER_NOT_VOTED_ROUND_MASTER,
-										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING), 
+										 	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING,
+										 	ActionCondiction.PLAYER_IS_NOT_ELIMINATED), 
 										 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	SEND_PLAYER_ANSWER = (8, 'Send Player Answer', ActionRw.WRITE, 
@@ -309,7 +327,7 @@ class Action(Enum):
 						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 						  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.GAME_IS_WAITING_ANSWERS,
 						  	ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_IS_NOT_ROUND_MASTER,
-						  	ActionCondiction.PLAYER_NOT_ANSWER_YET), 
+						  	ActionCondiction.PLAYER_NOT_ANSWER_YET, ActionCondiction.PLAYER_IS_NOT_ELIMINATED), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', ActionRw.WRITE, 
@@ -317,8 +335,8 @@ class Action(Enum):
 								  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM,
 								  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM,
 								  	ActionCondiction.GAME_IS_ELECTING_CORRECT_ANSWER, ActionCondiction.TIME_NOT_IS_UP,
-								  	ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER,
-								  	ActionCondiction.CHOSEN_PLAYER_IS_NOT_OUT_ELECTING), 
+								  	ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER, 
+								  	ActionCondiction.PLAYER_IS_NOT_WATCHING), 
 								  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	GET_LIST_ROOMS = (10, 'Get List Rooms', ActionRw.READ, 
@@ -364,8 +382,9 @@ class Action(Enum):
 
 	SEND_MASTER_ANSWER = (17, 'Send Master Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION),
-						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER,
-						  	ActionCondiction.GAME_IS_WAITING_ANSWERS,  ActionCondiction.TIME_IS_UP), 
+						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
+						  	ActionCondiction.GAME_IS_WAITING_CORRECT_ANSWER, 
+						  	ActionCondiction.WORD_IS_SAME_HASH), 
 						  ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	def __init__(self, id_, description, 

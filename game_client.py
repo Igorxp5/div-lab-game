@@ -269,10 +269,10 @@ class GameClient(Thread):
 		packet = PacketRequest(Action.START_ROOM_GAME, params)
 		self._sendPacketRequest(packet)
 
-	def voteRoundMaster(self, voteSocket):
+	def voteRoundMaster(self, votePlayer):
 		params = {
 			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
-			ActionParam.SOCKET_IP: voteSocket.ip,
+			ActionParam.SOCKET_IP: votePlayer.socket.ip,
 		}
 		
 		self._raiseActionIfNotCondictions(Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER, params)
@@ -324,7 +324,7 @@ class GameClient(Thread):
 	def getSocket(self, ip):
 		return self._network.allNetwork.get(ip, None)
 
-	def getListRooms(self):
+	def getAvailableRooms(self):
 		return self._rooms
 
 	def getRoom(self, roomId):

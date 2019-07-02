@@ -212,7 +212,7 @@ class ActionCondiction(Enum):
 		else ActionError.PLAYER_IS_OUT_ELECTING
 	)
 	CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER = lambda network, socket, rooms, game, params: (
-		ActionError.NONE if (
+		ActionError.NONE if (params[ActionParam.SOCKET_IP] == 'None' or params[ActionParam.SOCKET_IP] == None or
 			(game.roundMaster and game.roundMaster.socket.ip == params[ActionParam.SOCKET_IP])
 			or (game.contestingPlayer and game.contestingPlayer.socket.ip == params[ActionParam.SOCKET_IP])
 		) else ActionError.INVALID_CONTESTING_VOTE
@@ -333,7 +333,7 @@ class Action(Enum):
 	CHOOSE_VOTE_CONTEST_ANSWER = (9, 'Choose Vote Contest Answer', ActionRw.WRITE, 
 								  (ActionParam.ROOM_ID, ActionParam.SOCKET_IP), 
 								  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM,
-								  	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.CHOSEN_PLAYER_IS_IN_ROOM,
+								  	ActionCondiction.ROOM_STATUS_IN_GAME,
 								  	ActionCondiction.GAME_IS_ELECTING_CORRECT_ANSWER, ActionCondiction.TIME_NOT_IS_UP,
 								  	ActionCondiction.CHOSEN_PLAYER_IS_CONTESTING_ANSWER_OR_ROUND_MASTER, 
 								  	ActionCondiction.PLAYER_IS_NOT_WATCHING), 

@@ -13,10 +13,12 @@ class PlayerStatus(JsonSerializable, Enum):
     OUTSTANDING_ORGANIZER_CHOOSES_THE_WORD_OF_THE_ROUND = 'Aguardando Escolha da Palavra da Rodada'
     RESPONDING_TO_SILABIC_DIVISION                      = 'Respondendo Divisão Silábica'
     AWAITING_THE_END_OF_THE_SILABIC_DIVISION_PHASE      = 'Aguardando Fim da Fase Divisão Silábica'
+    AWAITING_CONTESTATIONS                              = 'Aguardando Contestações'
     VOTING_IN_CONTEST_OF_THE_CORRECT_WORD               = 'Votando na Contestação de Resposta Correta'
     AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST       = 'Aguardando Fim da Contestação de Resposta Correta'
     WAITING_FOR_NEXT_ROUND                              = 'Aguardando Fim da Rodada'
     ELIMINATED                                          = 'Eliminado'
+    WINNER                                              = 'Vencedor'
 
     def __repr__(self):
         return f'{self.__class__.__name__}.{self.name}'

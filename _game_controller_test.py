@@ -4,8 +4,12 @@ def gameController(game):
 	# game.joinRoomToPlay(list(game.getAvailableRooms().keys())[0], 'Igorxp5')
 	# game.quitRoom()
 	# game.startGame()
-	game.voteRoundMaster(game.getCurrentRoom().getPlayers()[0])
+	# game.voteRoundMaster(game.getCurrentRoom().getPlayers()[0])
 	# game.chooseRoundWord('bola', 'bo-la')
 	# game.answerRoundWord('bo-la-la')
 	# game.contestCorrectAnswer()
+	# contestingWord = game.getContestingWord()
+	# roundMasterWord = game.getRoundWord()
+	# noneWord = None
+	# game.voteCorrectAnswer(roundMasterWord)
 	pass

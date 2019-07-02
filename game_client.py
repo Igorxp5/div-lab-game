@@ -807,7 +807,7 @@ class GameClient(Thread):
 			self._roomPrint(f'Eleição da Contestação - Houveram empates. Portanto ninguém será elimando nesta rodada.')
 
 			for player in self._sharedGameData.roundPlayersEliminated:
-				player.status = AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+				player.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
 
 		else:
 			word = self._wordOfContestingByPlayer(moreVotesPlayers[0])
@@ -823,7 +823,7 @@ class GameClient(Thread):
 								f'Portanto somente o Organizador da Rodada será eliminado nesta rodada.')
 
 				for player in self._sharedGameData.roundPlayersEliminated:
-					player.status = AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+					player.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
 
 				self.getRoundMaster().status = ELIMINATED
 

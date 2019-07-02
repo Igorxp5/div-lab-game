@@ -34,8 +34,8 @@ class SharedGameData(JsonSerializable):
 		self.roundWord 				= None
 		self.gamePhase 				= None
 
-		# Variavel temporária para guardar a palavra da rodada enviada pelo RoundMaster
-		self.wantedRoundWord 		= None 
+		self.wantedRoundMasterWord	= None 
+		self.wantedPlayerWord 		= None 
 
 		self.chosenWords 			= []
 		self.roundMasterVotes 		= {}
@@ -293,7 +293,7 @@ class GameClient(Thread):
 
 		packet = PacketRequest(Action.CHOOSE_ROUND_WORD, params)
 		self._sendPacketRequest(packet)
-		self._sharedGameData.wantedRoundWord = word
+		self._sharedGameData.wantedRoundMasterWord = word
 		return word
 
 	def answerRoundWord(self, wordDivision):
@@ -309,11 +309,15 @@ class GameClient(Thread):
 
 		packet = PacketRequest(Action.SEND_PLAYER_ANSWER, params)
 		self._sendPacketRequest(packet)
+		self._sharedGameData.wantedPlayerWord = answerWord 
 		return answerWord
 
 	def contestCorrectAnswer(self):
+		word = getattr(self._sharedGameData, 'wantedPlayerWord', None)
+		wordGetNoHashSyllables = getattr(word, 'getNoHashSyllables', None)
 		params = {
-			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None)
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.WORD_DIVISION: wordGetNoHashSyllables() if callable(wordGetNoHashSyllables) else None
 		}
 
 		self._raiseActionIfNotCondictions(Action.CONTEST_WORD, params)
@@ -530,7 +534,8 @@ class GameClient(Thread):
 			self._listenChangingGamePhaseCallback(gamePhase)
 
 	def _electingMasterRoomPhaseTimeIsUpCallback(self):
-		self._roomPrint('Acabou o tempo para votar no Organizador da Rodada')
+		if self.getPhaseTime() == 0:
+			self._roomPrint('Acabou o tempo para votar no Organizador da Rodada')
 
 		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.roundMasterVotes)
 
@@ -606,13 +611,8 @@ class GameClient(Thread):
 			room = self.getRoom(params[ActionParam.ROOM_ID])
 			playerSocket = room.getPlayer(socket)
 			word = Word(params[ActionParam.WORD_STRING], params[ActionParam.WORD_DIVISION])
-			
-			if self.getCurrentPlayer() is self.getRoundMaster():
-				self._sharedGameData.roundWord = self._sharedGameData.wantedRoundWord
-				self._sharedGameData.wantedRoundWord = None
-				
-			else:
-				self._sharedGameData.roundWord = word
+
+			self._sharedGameData.roundWord = word
 			
 			self._sharedGameData.chosenWords.append({'player': playerSocket, 'word': word})
 
@@ -627,7 +627,8 @@ class GameClient(Thread):
 			)
 
 	def _watingAnswersTimeIsUpCallback(self):
-		self._roomPrint('Acabou o tempo para responder a Divisão Silábica.')
+		if self.getPhaseTime() == 0:
+			self._roomPrint('Acabou o tempo para responder a Divisão Silábica.')
 
 		self._sharedGameData.setGamePhase(GamePhase.WAITING_CORRECT_ANSWER)
 
@@ -637,7 +638,7 @@ class GameClient(Thread):
 	def _sendCorrectAnswer(self):
 		params = {
 			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
-			ActionParam.WORD_DIVISION: self.getRoundWord().getNoHashSyllables()
+			ActionParam.WORD_DIVISION: self._sharedGameData.wantedRoundMasterWord.getNoHashSyllables()
 		}
 
 		self._raiseActionIfNotCondictions(Action.SEND_MASTER_ANSWER, params)
@@ -649,7 +650,7 @@ class GameClient(Thread):
 		if actionError == ActionError.NONE:
 			wordDivision = params[ActionParam.WORD_DIVISION]
 			wordStr = self._sharedGameData.roundWord.wordStr
-			self._sharedGameData.roundWord = Word(wordStr, wordDivision)
+			self._sharedGameData.wantedRoundMasterWord = Word(wordStr, wordDivision)
 
 			self._roomPrint(f'A resposta correta era {wordDivision}')
 
@@ -698,11 +699,16 @@ class GameClient(Thread):
 	def _contestAnswerWordCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
+			wordDivision = params[ActionParam.WORD_DIVISION]
+			wordStr = self._sharedGameData.roundAnswers[socket.ip].wordStr
+			self._sharedGameData.roundAnswers[socket.ip] = Word(wordStr, wordDivision)
+
 			playerSocket = room.getPlayer(socket)
 
 			self._sharedGameData.contestingPlayer = playerSocket
 
-			self._roomPrint(f'\'{playerSocket.nickname}\' contestou a resposta correta.')
+			self._roomPrint(f'\'{playerSocket.nickname}\' contestou a resposta correta. '
+							f'Sua resposta foi {wordDivision}')
 
 			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 			self._sharedGameData.setGamePhase(GamePhase.ELECTING_CORRECT_ANSWER)

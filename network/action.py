@@ -300,7 +300,7 @@ class Action(Enum):
 						 ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
 
 	CONTEST_WORD = (5, 'Contest Word', ActionRw.WRITE, 
-					(ActionParam.ROOM_ID,),
+					(ActionParam.ROOM_ID, ActionParam.WORD_DIVISION),
 					(ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM, 
 						ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.GAME_IS_WAITING_CONTESTS, 
 						ActionCondiction.TIME_NOT_IS_UP, ActionCondiction.PLAYER_MISSED_ANSWER), 

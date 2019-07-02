@@ -16,7 +16,7 @@ class Word(JsonSerializable):
     def __eq__(self, other):
         if not isinstance(other, Word):
             raise TypeError('expected a Word')
-        return (self.syllables.lower() == other.syllables.lower() and 
+        return (self.getNoHashSyllables().lower() == other.getNoHashSyllables().lower() and 
                     self.wordStr.lower() == other.wordStr.lower())
 
     @property

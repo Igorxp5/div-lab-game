@@ -390,26 +390,7 @@ class Action(Enum):
 					   	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.CAN_START_GAME), 
 					   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
-	INCREMENT_GAME_PHASE = (14, 'Increment Game Phase', ActionRw.WRITE, 
-							(ActionParam.ROOM_ID,), 
-							(ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_OWNER_ROOM, 
-								ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.TIME_IS_UP), 
-							ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
-
-	INCREMENT_GAME_ROUND = (15, 'Increment Game Round', ActionRw.WRITE, 
-							(ActionParam.ROOM_ID,), 
-							(ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_OWNER_ROOM,
-								ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.GAME_IS_RESULT_ROUND,
-								ActionCondiction.TIME_IS_UP),
-							ActionGroup.ROOM_PLAYERS, ActionGroup.ROOM_PLAYERS)
-
-	BE_ROOM_OWNER = (16, 'Be Room Owner', ActionRw.WRITE, 
-					 (ActionParam.ROOM_ID,), 
-					 (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_INSIDE_ROOM,
-					 	ActionCondiction.ROOM_STATUS_IN_GAME, ActionCondiction.PLAYER_CAN_BE_OWNER), 
-					 ActionGroup.ALL_NETWORK, ActionGroup.ROOM_PLAYERS)
-
-	SEND_MASTER_ANSWER = (17, 'Send Master Answer', ActionRw.WRITE, 
+	SEND_MASTER_ANSWER = (14, 'Send Master Answer', ActionRw.WRITE, 
 						  (ActionParam.ROOM_ID, ActionParam.WORD_DIVISION),
 						  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_IS_ROUND_MASTER, 
 						  	ActionCondiction.GAME_IS_WAITING_CORRECT_ANSWER, 

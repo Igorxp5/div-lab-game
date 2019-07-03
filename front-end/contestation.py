@@ -46,7 +46,67 @@ class ContestationWindow(QMainWindow):
         self.text.setStyleSheet("font: 15pt") 
         self.text.move(800, 150)   
         self.text.setMinimumSize(1000, 32)
+
+        #texto aguardando jogadores responderem
+        self.text = QLabel(self)
+        self.text.setText('Aguardando jogadores responderem')
+        self.text.setWordWrap(True)
+        self.text.setStyleSheet("font: 15pt") 
+        self.text.move(250, 300)   
+        self.text.setMinimumSize(1000, 32)
+        self.text.hide()
     
+        #texto aguardando contestações dos jogadores
+        self.text = QLabel(self)
+        self.text.setText('Aguardando contestações dos jogadores')
+        self.text.setWordWrap(True)
+        self.text.setStyleSheet("font: 15pt") 
+        self.text.move(250, 300)   
+        self.text.setMinimumSize(1000, 32)
+        self.text.hide()
+
+        #texto contestação dos jogadores 
+        self.text = QLabel(self)
+        self.text.setText('Jogador X' + 'contestou a resposta correta desta rodada. Vote na palavra correta. Caso a palavra do organizador esteja errada, ele será eliminado da partida.')
+        self.text.setWordWrap(True)
+        self.text.setStyleSheet("font: 10pt") 
+        self.text.move(250, 220)   
+        self.text.setMinimumSize(500, 32)
+
+                #Caixa de divisão silábica
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('RESPOSTA SUGERIDA')
+        self.nameLabel.resize(200, 32)
+        self.nameLabel.move(250, 380)
+        self.line = QLineEdit(self)
+        self.line.setText('PA-RA-LELE-PÍ-PA-DO')    
+        self.line.move(360, 380)
+        self.line.resize(200, 32)
+        self.nameLabel.hide()
+        self.line.hide()
+
+        #Botão de votar em palavra contestada como errada
+        voteWrongButton = QPushButton('Errada', self)
+        #voteWrongButton.clicked.connect(self.clickMethod)
+        voteWrongButton.resize(200, 32)
+        voteWrongButton.move(250, 500)
+        voteWrongButton.hide()
+        #setVisible(false)
+        
+        #Botão de votar em palavra contestada como nulo
+        voteNullButton = QPushButton('Nulo', self)
+        #voteNullButton.clicked.connect(self.clickMethod)
+        voteNullButton.resize(200, 32)
+        voteNullButton.move(480, 500)
+        voteNullButton.hide()
+
+        #Botão de votar em palavra contestada como correta
+        voteRightButton = QPushButton('Correta', self)
+        #voteRightButton.clicked.connect(self.clickMethod)
+        voteRightButton.resize(200, 32)
+        voteRightButton.move(710, 500)
+        voteRightButton.hide()
+
         #Lista de jogadores da sala
         # ----- COLOCAR ÍCONE AO LADO DE QUEM ESTA ASSISTINDO
         # ----- ESSA MESMA LISTA SERVIRÁ PARA VOTAR EM UM ORGANIZADOR DA PARTIDA

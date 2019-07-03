@@ -1,15 +1,10 @@
-import subprocess
-from utils.console import *
+import console
 
-init()
+from console_chat import ConsoleChat
 
-def drawInputBox():
-	for x in range(CONSOLE_WIDTH + 1):
-		move_cursor(x, CONSOLE_HEIGHT - 1)
-		print('_', end='')
+from threading import Thread
 
-drawInputBox()
-# command = input('[COMMAND HERE] -> ')
+console.init()
 
 def runProcess(exe):    
     p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -20,9 +15,23 @@ def runProcess(exe):
         yield line
         if retcode is not None:
             break
-move_cursor(0, 0)
-for line in runProcess('python game_client.py'):
-	print(line)
+
+def readProcessLines(chat):
+    for line in runProcess('venv/Scripts/python game_client.py'):
+        chat.putLine(line)
+
+def command(command_):
+
+Thread(readProcessLines, daemon=True).start()
+
+chat = ConsoleChat()
+chat.start()
+while True:
+    text = chat.input()
+
+
+
+
 
 # print(Fore.RED + 'some red text')
 

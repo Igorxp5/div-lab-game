@@ -23,13 +23,14 @@ class ConsoleChat:
 		return text
 
 	def putLine(self, line):
-		Console.moveCursor(5, 2 + 1)
-		start = 0 if len(self._lines) <= self._height else self._lines - self._height
+		self._lines.append(line)
+		Console.moveCursor(5, 2)
+		start = 0 if len(self._lines) <= self._height else len(self._lines) - self._height
+		lineNumber = 0
 		for i in range(start, len(self._lines)):
 			print(f'{self._lines[i]}')
-
-			self._lines.append(line)
-
+			lineNumber += 1
+			Console.moveCursor(5, 2 + lineNumber)
 
 
 if __name__ == '__main__':

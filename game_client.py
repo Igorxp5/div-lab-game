@@ -249,6 +249,17 @@ class GameClient(Thread):
 		self._sendPacketRequest(packet)
 		return room
 
+	def kickPlayerFromRoom(self, player):
+		params = {
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.SOCKET_IP: player.socket.ip,
+		}
+
+		self._raiseActionIfNotCondictions(Action.KICK_PLAYER_ROOM, params)
+		packet = PacketRequest(Action.KICK_PLAYER_ROOM, params)
+		self._sendPacketRequest(packet)
+
+
 	def joinRoomToPlay(self, roomId, playerName):
 		params = {
 			ActionParam.ROOM_ID: roomId,
@@ -455,6 +466,7 @@ class GameClient(Thread):
 			Action.GET_LIST_ROOMS: self._getListRoomsCallback,
 			Action.CREATE_ROOM: self._createRoomCallback,
 			Action.JOIN_ROOM_PLAY: self._joinRoomToPlayCallback,
+			Action.KICK_PLAYER_ROOM: self._kickPlayerFromRoomCallback,
 			Action.QUIT_ROOM: self._quitRoomCallback,
 			Action.START_ROOM_GAME: self._startGameCallback,
 			Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER: self._chooseVoteElectionRoundMasterCallback,
@@ -537,6 +549,15 @@ class GameClient(Thread):
 
 			if len(room.players) == room.limitPlayers and room.owner is self.socket:
 				self.startGame()
+
+	def _kickPlayerFromRoomCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			bannedPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
+			ownerPlayer = room.getPlayer(room.owner)
+			room.banSocket(bannedPlayer.socket)
+			self._roomPrint(f'\'{ownerPlayer.nickname}\' baniu \'{bannedPlayer.nickname}\' desta sala.')
+			self._removeSocketFromRoom(room, bannedPlayer.socket)
 
 	def _quitRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:

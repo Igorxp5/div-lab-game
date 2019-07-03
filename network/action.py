@@ -95,8 +95,9 @@ class ActionError(Enum):
 	GAME_NOT_IN_WAITING_CONTESTS = (32, 'O jogo não se encontra na fase de espera de contestações.')
 	GAME_NOT_IN_CHOOSING_ROUND_WORD = (33, 'O jogo não está na fase de escolha da palavra da rodada.')
 	GAME_NOT_IN_RESULT_ROUND = (34, 'O jogo não está na fase de resultado da rodada.')
-	PLAYER_IS_CONTESTING_PLAYER = (35, 'O jogoador é quem está contestando a resposta.')
-	CHOSEN_PLAYER_IS_ELIMINATED = (36, 'O jogoador escolhido já foi eliminado da partida.')
+	PLAYER_IS_CONTESTING_PLAYER = (35, 'O jogador é quem está contestando a resposta.')
+	CHOSEN_PLAYER_IS_ELIMINATED = (36, 'O jogador escolhido já foi eliminado da partida.')
+	PLAYER_BANNED_FROM_ROOM = (37, 'O jogador não pode entrar na sala por ter sido banido.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -135,6 +136,10 @@ class ActionCondiction(Enum):
 	ROOM_STATUS_IN_WAIT = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].status is RoomStatus.ON_HOLD)
 		else ActionError.ROOM_IN_GAME
+	)
+	PLAYER_IS_NOT_BANNED_FROM_ROOM = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (socket.ip not in rooms[params[ActionParam.ROOM_ID]].bannedSockets)
+		else ActionError.PLAYER_BANNED_FROM_ROOM
 	)
 	PLAYER_IS_NOT_A_OWNER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (len(rooms) == 0 or 
@@ -304,7 +309,8 @@ class Action(Enum):
 					  (ActionParam.ROOM_ID, ActionParam.PLAYER_NAME), 
 					  (ActionCondiction.ROOM_EXISTS, ActionCondiction.PLAYER_NOT_IN_A_ROOM, 
 					  	ActionCondiction.ROOM_STATUS_IN_WAIT, ActionCondiction.ROOM_IS_NOT_FULL,
-					  	ActionCondiction.PLAYER_NAME_IS_VALID), 
+					  	ActionCondiction.PLAYER_NAME_IS_VALID, 
+					  	ActionCondiction.PLAYER_IS_NOT_BANNED_FROM_ROOM), 
 					  ActionGroup.ALL_NETWORK, ActionGroup.ROOM_OWNER)
 
 	JOIN_ROOM_WATCH = (3, 'Join into Room to Watch', ActionRw.WRITE, 

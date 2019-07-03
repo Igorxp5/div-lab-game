@@ -68,9 +68,6 @@ class SharedGameData(JsonSerializable):
 			startThread(self._changingGamePhaseCallback, gamePhase)
 		self._setRoomPlayersStatus(gamePhase)
 
-		if self.room:
-			print(self.room.players)
-
 	def setChangingGamePhaseCallback(self, callback):
 		self._changingGamePhaseCallback = callback
 

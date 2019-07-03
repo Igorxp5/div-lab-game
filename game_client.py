@@ -188,6 +188,7 @@ class GameClient(Thread):
 
 		self._waitDownloadListRooms = Event()
 		self._removePlayerFromRoomLock = Lock()
+		self._blockUntilConnectToNetwork = Event()
 
 	@property
 	def _receiverGroupIps(self):
@@ -212,6 +213,8 @@ class GameClient(Thread):
 		self._network.start()
 		self._network.blockUntilConnectToNetwork()
 
+		self._blockUntilConnectToNetwork.set()
+
 		if len(self._network.peers) > 0:
 			self._waitDownloadListRooms.set()
 			self.downloadListRooms()
@@ -224,6 +227,9 @@ class GameClient(Thread):
 				_game_controller_test.gameController(self)
 			except Exception as exception:
 				traceback.print_exc()
+
+	def blockUntilConnectToNetwork(self):
+		self._blockUntilConnectToNetwork.wait()
 
 	def downloadListRooms(self):
 		packet = PacketRequest(Action.GET_LIST_ROOMS)
@@ -389,6 +395,12 @@ class GameClient(Thread):
 		if room:
 			return room.getPlayer(self.socket)
 		return None
+
+	def getRoomByName(self, name):
+		for room in self.getAvailableRooms().values():
+			if room.getName() == name:
+				return room
+		return None 
 
 	def getGamePhase(self):
 		return self._sharedGameData.gamePhase

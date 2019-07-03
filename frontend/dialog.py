@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMessageBox
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot
  
-class App(QWidget):
+class Dialog(QWidget):
  
     def __init__(self):
         super().__init__()
@@ -14,7 +14,7 @@ class App(QWidget):
         self.top = 10
         self.width = 320
         self.height = 200
-        #self.winnerPollDialog()
+        # self.winnerPollDialog()
  
     def fullRoomDialog(self):
         self.setWindowTitle(self.title)
@@ -27,6 +27,9 @@ class App(QWidget):
             print('No clicked.')
  
         self.show()
+
+    def generic(self, title, message):
+        QMessageBox.about(self, title, message)
     
     def createRoomDialog(self):
         self.setWindowTitle('Criar sala | DivLab Game')
@@ -107,5 +110,5 @@ class App(QWidget):
     
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = App()
+    ex = Dialog()
     sys.exit(app.exec_())

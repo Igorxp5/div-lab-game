@@ -1189,8 +1189,11 @@ def startThread(target, *args):
 	Thread(target=target, args=args, daemon=True).start()
 
 if __name__ == '__main__':
-	print('Selecione interface: ')
+	interfaces = getAllIpAddress()
 	print('Interface disponíveis: ')
+	for i, ip in enumerate(interfaces):
+		print(f'{i} - {ip}')
+	number_interface = int(input('\nSelecione a interface: '))
 	game = GameClient(interfaces[number_interface])
 	game.start()
 

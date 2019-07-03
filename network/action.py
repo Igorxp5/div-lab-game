@@ -92,10 +92,11 @@ class ActionError(Enum):
 	GAME_NOT_IN_ELECTING_CORRECT_ANSWER = (29, 'O jogo não se encontra na fase de eleger a resposta correta da contestação.')
 	GAME_NOT_IN_WAITING_CORRECT_ANSWER = (30, 'A resposta correta da rodada ainda não pode ser enviada.')
 	GAME_NOT_IN_WAITING_ANSWERS = (31, 'O jogo não se encontra na fase de enviar resposta da divisão silábica.')
-	GAME_NOT_IN_CHOOSING_ROUND_WORD = (32, 'O jogo não está na fase de escolha da palavra da rodada.')
-	GAME_NOT_IN_RESULT_ROUND = (33, 'O jogo não está na fase de resultado da rodada.')
-	PLAYER_IS_CONTESTING_PLAYER = (34, 'O jogoador é quem está contestando a resposta.')
-	CHOSEN_PLAYER_IS_ELIMINATED = (35, 'O jogoador escolhido já foi eliminado da partida.')
+	GAME_NOT_IN_WAITING_CONTESTS = (32, 'O jogo não se encontra na fase de espera de contestações.')
+	GAME_NOT_IN_CHOOSING_ROUND_WORD = (33, 'O jogo não está na fase de escolha da palavra da rodada.')
+	GAME_NOT_IN_RESULT_ROUND = (34, 'O jogo não está na fase de resultado da rodada.')
+	PLAYER_IS_CONTESTING_PLAYER = (35, 'O jogoador é quem está contestando a resposta.')
+	CHOSEN_PLAYER_IS_ELIMINATED = (36, 'O jogoador escolhido já foi eliminado da partida.')
 
 	def __init__(self, code, message):
 		self.code = code
@@ -122,6 +123,10 @@ class ActionCondiction(Enum):
 	ROOM_EXISTS = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (params[ActionParam.ROOM_ID] in rooms)
 		else ActionError.ROOM_NOT_EXISTS
+	)
+	ROOM_NAME_NOT_EXISTS = lambda network, socket, rooms, game, params: (
+		ActionError.NONE if (all(room.name != params[ActionParam.ROOM_NAME] for room in rooms.values()))
+		else ActionError.ROOM_NAME_ALREADY_EXIST
 	)
 	ROOM_STATUS_IN_GAME = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (rooms[params[ActionParam.ROOM_ID]].status is RoomStatus.IN_GAME)
@@ -173,7 +178,7 @@ class ActionCondiction(Enum):
 	)
 	GAME_IS_WAITING_CONTESTS = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.WAITING_CONTESTS)
-		else ActionError.GENERIC
+		else ActionError.GAME_NOT_IN_WAITING_CONTESTS
 	)
 	GAME_IS_ELECTING_ROUND_MASTER = lambda network, socket, rooms, game, params: (
 		ActionError.NONE if (game and game.gamePhase is GamePhase.ELECTING_ROUND_MASTER or 
@@ -292,7 +297,7 @@ class Action(Enum):
 				   (ActionParam.ROOM_ID, ActionParam.ROOM_NAME, 
 				   	ActionParam.PLAYERS_LIMIT, ActionParam.PLAYER_NAME), 
 				   (ActionCondiction.PLAYER_IS_NOT_A_OWNER, ActionCondiction.PLAYER_NOT_IN_A_ROOM,
-				   	ActionCondiction.MIN_PLAYERS_TO_CREATE_ROOM), 
+				   	ActionCondiction.ROOM_NAME_NOT_EXISTS, ActionCondiction.MIN_PLAYERS_TO_CREATE_ROOM), 
 				   ActionGroup.ALL_NETWORK, ActionGroup.ALL_NETWORK)
 
 	JOIN_ROOM_PLAY = (2, 'Join into Room to Play', ActionRw.WRITE, 

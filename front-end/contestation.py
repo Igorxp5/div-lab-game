@@ -10,7 +10,7 @@ class ContestationWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         
-         #janela
+        #janela
         self.resize(1000, 600)
         self.qtRectangle = self.frameGeometry()
         self.setMinimumSize(self.sizeHint())    

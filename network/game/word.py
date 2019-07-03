@@ -7,7 +7,7 @@ class Word(JsonSerializable):
 
     def __init__(self, wordStr, syllables, hashSyllables=False):
         self.wordStr    = wordStr.title()
-        self._syllables  = syllables
+        self._syllables  = syllables.lower()
         self.hashSyllables = hashSyllables
 
     def __repr__(self):
@@ -16,8 +16,8 @@ class Word(JsonSerializable):
     def __eq__(self, other):
         if not isinstance(other, Word):
             raise TypeError('expected a Word')
-        return (self.syllables.lower() == other.syllables.lower() and 
-                    self.wordStr.lower() == other.wordStr.lower())
+        return (self.getNoHashSyllables().lower() == other.getNoHashSyllables().lower() and 
+                    self.wordStr == other.wordStr)
 
     @property
     def syllables(self):

@@ -34,15 +34,16 @@ class SharedGameData(JsonSerializable):
 		self.roundWord 				= None
 		self.gamePhase 				= None
 
-		# Variavel temporária para guardar a palavra da rodada enviada pelo RoundMaster
-		self.wantedRoundWord 		= None 
+		self.wantedRoundMasterWord	= None 
+		self.wantedPlayerWord 		= None 
 
 		self.chosenWords 			= []
 		self.roundMasterVotes 		= {}
 		self.electingOut 			= {}
-		self.contestAnswerVotes 	= {}
+		self.contestingVotes 		= {}
 		self.roundAnswers 			= {}
 		self.contestingPlayer 		= None
+		self.roundPlayersEliminated = []
 		
 		self.roundNumber 			= 0
 		self._phaseTimeStart 		= None
@@ -74,7 +75,7 @@ class SharedGameData(JsonSerializable):
 		room = self.room
 		roomPlayers = room.players
 		for player in roomPlayers:
-			if player.status in (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED):
+			if player.status not in (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED):
 				if gamePhase in (GamePhase.ELECTING_ROUND_MASTER, GamePhase.RELECTING_ROUND_MASTER):
 					player.status = PlayerStatus.VOTING_ON_THE_ROUND_ORGANIZER
 				elif gamePhase == GamePhase.CHOOSING_ROUND_WORD:
@@ -88,7 +89,14 @@ class SharedGameData(JsonSerializable):
 					else:
 						player.status = PlayerStatus.RESPONDING_TO_SILABIC_DIVISION
 				elif gamePhase == GamePhase.WAITING_CONTESTS:
-					pass
+					player.status = PlayerStatus.AWAITING_CONTESTATIONS
+				elif gamePhase == GamePhase.ELECTING_CORRECT_ANSWER:
+					if player is self.roundMaster or player is self.contestingPlayer:
+						player.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+					else:
+						player.status = PlayerStatus.VOTING_IN_CONTEST_OF_THE_CORRECT_WORD
+				elif gamePhase == GamePhase.RESULT_ROUND:
+					player.status = PlayerStatus.WAITING_FOR_NEXT_ROUND
 
 	def _dictKeyProperty(self):
 		return {
@@ -99,7 +107,7 @@ class SharedGameData(JsonSerializable):
 			'chosenWords': self.chosenWords,
 			'electingOut': self.electingOut,
 			'roundMasterVotes': {ip: votePlayer.socket for ip, votePlayer in self.roundMasterVotes.items()},
-			'contestAnswerVotes': {ip: votePlayer.socket for ip, votePlayer in self.contestAnswerVotes.items()},
+			'contestingVotes': {ip: votePlayer.socket for ip, votePlayer in self.contestingVotes.items()},
 			'roundAnswers': self.roundAnswers,
 			'roundNumber': self.roundNumber,
 			'phaseTime': self.phaseTime
@@ -135,7 +143,7 @@ class SharedGameData(JsonSerializable):
 		for ip, voteIp in jsonDict['roundMasterVotes']:
 			sharedGameData.roundMasterVotes[ip] = sharedGameData.room.players[voteIp]
 
-		for ip, voteIp in jsonDict['contestAnswerVotes']:
+		for ip, voteIp in jsonDict['contestingVotes']:
 			sharedGameData.roundMasterVotes[ip] = sharedGameData.room.players[voteIp]
 		
 		for ip, playerAnswerDict in jsonDict['roundAnswers']:
@@ -238,6 +246,17 @@ class GameClient(Thread):
 		self._sendPacketRequest(packet)
 		return room
 
+	def kickPlayerFromRoom(self, player):
+		params = {
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.SOCKET_IP: player.socket.ip,
+		}
+
+		self._raiseActionIfNotCondictions(Action.KICK_PLAYER_ROOM, params)
+		packet = PacketRequest(Action.KICK_PLAYER_ROOM, params)
+		self._sendPacketRequest(packet)
+
+
 	def joinRoomToPlay(self, roomId, playerName):
 		params = {
 			ActionParam.ROOM_ID: roomId,
@@ -247,6 +266,17 @@ class GameClient(Thread):
 		self._raiseActionIfNotCondictions(Action.JOIN_ROOM_PLAY, params)
 
 		packet = PacketRequest(Action.JOIN_ROOM_PLAY, params)
+		self._sendPacketRequest(packet)
+
+	def joinRoomToWatch(self, roomId, playerName):
+		params = {
+			ActionParam.ROOM_ID: roomId,
+			ActionParam.PLAYER_NAME: playerName
+		}
+
+		self._raiseActionIfNotCondictions(Action.JOIN_ROOM_WATCH, params)
+
+		packet = PacketRequest(Action.JOIN_ROOM_WATCH, params)
 		self._sendPacketRequest(packet)
 
 	def quitRoom(self):
@@ -293,7 +323,7 @@ class GameClient(Thread):
 
 		packet = PacketRequest(Action.CHOOSE_ROUND_WORD, params)
 		self._sendPacketRequest(packet)
-		self._sharedGameData.wantedRoundWord = word
+		self._sharedGameData.wantedRoundMasterWord = word
 		return word
 
 	def answerRoundWord(self, wordDivision):
@@ -309,16 +339,37 @@ class GameClient(Thread):
 
 		packet = PacketRequest(Action.SEND_PLAYER_ANSWER, params)
 		self._sendPacketRequest(packet)
+		self._sharedGameData.wantedPlayerWord = answerWord 
 		return answerWord
 
 	def contestCorrectAnswer(self):
+		word = getattr(self._sharedGameData, 'wantedPlayerWord', None)
+		wordGetNoHashSyllables = getattr(word, 'getNoHashSyllables', None)
 		params = {
-			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None)
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.WORD_DIVISION: wordGetNoHashSyllables() if callable(wordGetNoHashSyllables) else None
 		}
 
 		self._raiseActionIfNotCondictions(Action.CONTEST_WORD, params)
 
 		packet = PacketRequest(Action.CONTEST_WORD, params)
+		self._sendPacketRequest(packet)
+
+	def voteCorrectAnswer(self, word):
+		socketIp = None
+		if word:
+			if word is self.getRoundWord():
+				socketIp = self.getRoundMaster().socket.ip
+			elif word is self.getContestingWord():
+				socketIp = self.getContestingPlayer().socket.ip
+		params = {
+			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
+			ActionParam.SOCKET_IP: socketIp
+		}
+		
+		self._raiseActionIfNotCondictions(Action.CHOOSE_VOTE_CONTEST_ANSWER, params)
+		
+		packet = PacketRequest(Action.CHOOSE_VOTE_CONTEST_ANSWER, params)
 		self._sendPacketRequest(packet)
 
 	def getSocket(self, ip):
@@ -357,6 +408,12 @@ class GameClient(Thread):
 	def getRoundWord(self):
 		return self._sharedGameData.roundWord
 
+	def getContestingWord(self):
+		if self.getContestingPlayer():
+			contestingPlayerSocketIp = self.getContestingPlayer().socket.ip
+			return self._sharedGameData.roundAnswers.get(contestingPlayerSocketIp, None)
+		return None
+
 	def getElectingPlayers(self):
 		if (self.getCurrentRoom() and 
 				(self.getCurrentRoom().status == GamePhase.ELECTING_ROUND_MASTER or
@@ -374,6 +431,15 @@ class GameClient(Thread):
 
 	def isRoundMaster(self):
 		return self._sharedGameData.room and self._sharedGameData.room.owner is self.socket
+
+	def isEliminatedPlayer(self, player):
+		return player.status == PlayerStatus.ELIMINATED
+
+	def isWatchingPlayer(self, player):
+		return player.status == PlayerStatus.WATCHING
+
+	def isEliminatedOrWatchingPlayer(self, player):
+		return player.status in (PlayerStatus.ELIMINATED, PlayerStatus.WATCHING)
 
 	def setListenPacketCallbackByAction(self, action, callback):
 		if not isinstance(action, Action):
@@ -408,13 +474,16 @@ class GameClient(Thread):
 			Action.GET_LIST_ROOMS: self._getListRoomsCallback,
 			Action.CREATE_ROOM: self._createRoomCallback,
 			Action.JOIN_ROOM_PLAY: self._joinRoomToPlayCallback,
+			Action.JOIN_ROOM_WATCH: self._joinRoomToWatchCallback,
+			Action.KICK_PLAYER_ROOM: self._kickPlayerFromRoomCallback,
 			Action.QUIT_ROOM: self._quitRoomCallback,
 			Action.START_ROOM_GAME: self._startGameCallback,
 			Action.CHOOSE_VOTE_ELECTION_ROUND_MASTER: self._chooseVoteElectionRoundMasterCallback,
 			Action.CHOOSE_ROUND_WORD: self._chooseRoundWordCallback,
 			Action.SEND_PLAYER_ANSWER: self._answerRoundWordCallback,
 			Action.CONTEST_WORD: self._contestAnswerWordCallback,
-			Action.SEND_MASTER_ANSWER: self._correctAnswerCallback
+			Action.SEND_MASTER_ANSWER: self._correctAnswerCallback,
+			Action.CHOOSE_VOTE_CONTEST_ANSWER: self._chooseVoteContestAnswerCallback,
 		}
 		for action, callback in defaultListPacketCallbacks.items():
 			self._listenPacketCallbackByAction[action].append(callback)
@@ -490,6 +559,25 @@ class GameClient(Thread):
 			if len(room.players) == room.limitPlayers and room.owner is self.socket:
 				self.startGame()
 
+	def _joinRoomToWatchCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerName = params[ActionParam.PLAYER_NAME]
+			# player = Player(playerName, socket, PlayerStatus.WATCHING)
+			# room.players.append(player)
+			# self._sharedGameData.room = room
+			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\' para assistir a partida.')
+
+
+	def _kickPlayerFromRoomCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			bannedPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
+			ownerPlayer = room.getPlayer(room.owner)
+			room.banSocket(bannedPlayer.socket)
+			self._roomPrint(f'\'{ownerPlayer.nickname}\' baniu \'{bannedPlayer.nickname}\' desta sala.')
+			self._removeSocketFromRoom(room, bannedPlayer.socket)
+
 	def _quitRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
@@ -507,12 +595,15 @@ class GameClient(Thread):
 	def _nextRound(self):
 		self._sharedGameData.roundNumber 			+= 1
 
+		self.wantedRoundMasterWord					= None 
+		self.wantedPlayerWord 						= None 
 		self._sharedGameData.roundWord 				= None
 		self._sharedGameData.chosenWords 			= []
 		self._sharedGameData.roundMasterVotes 		= {}
 		self._sharedGameData.electingOut 			= {}
-		self._sharedGameData.contestAnswerVotes 	= {}
+		self._sharedGameData.contestingVotes 		= {}
 		self._sharedGameData.roundAnswers 			= {}
+		self._sharedGameData.roundPlayersEliminated = []
 
 		self._roomPrint(f'Rodada {self.getRoundNumber()}')
 
@@ -530,22 +621,24 @@ class GameClient(Thread):
 			self._listenChangingGamePhaseCallback(gamePhase)
 
 	def _electingMasterRoomPhaseTimeIsUpCallback(self):
-		self._roomPrint('Acabou o tempo para votar no Organizador da Rodada')
+		if self.getPhaseTime() == 0:
+			self._roomPrint('Acabou o tempo para votar no Organizador da Rodada')
 
 		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.roundMasterVotes)
 
 		if len(moreVotesPlayers) > 1:
 			for player in self._sharedGameData.room.players:
-				if player not in moreVotesPlayers:
-					self._sharedGameData.electingOut[player.socket.ip] = player
-				if player.socket.ip not in self._sharedGameData.roundMasterVotes:
-					self._roomPrint(f'\'{player.nickname}\' não votou. Seu voto foi anulado.')
-
-			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.RELECTING_ROUND_MASTER)
+				if self.isEliminatedOrWatchingPlayer(player):
+					if player not in moreVotesPlayers:
+						self._sharedGameData.electingOut[player.socket.ip] = player
+					if player.socket.ip not in self._sharedGameData.roundMasterVotes:
+						self._roomPrint(f'\'{player.nickname}\' não votou. Seu voto foi anulado.')
 
 			playersNickname = [player.nickname for player in moreVotesPlayers]
 			self._roomPrint(f'Eleição - Houveram empates. Ocorrerá outra rodada de votação com os jogadores: {", ".join(playersNickname)}.')
+			
+			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
+			self._sharedGameData.setGamePhase(GamePhase.RELECTING_ROUND_MASTER)
 
 			self._setCountdown(
 				GamePhase.RELECTING_ROUND_MASTER, CONFIG.TIME_PHASE, 
@@ -580,7 +673,7 @@ class GameClient(Thread):
 			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
 			self._sharedGameData.roundMasterVotes[socket.ip] = chosenPlayer
 			playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_ORGANIZER_VOTE
-			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em {chosenPlayer.nickname}.')
+			self._roomPrint(f'Eleição - \'{playerSocket.nickname}\' votou em \'{chosenPlayer.nickname}\'.')
 
 			isAllPlayersVoted = self._isAllPlayersVoted(
 				self._sharedGameData.roundMasterVotes, 
@@ -593,9 +686,13 @@ class GameClient(Thread):
 				elif self.getGamePhase() == GamePhase.RELECTING_ROUND_MASTER:
 					self._finishCountdown(GamePhase.RELECTING_ROUND_MASTER)
 
-	def _isAllPlayersVoted(self, electionVote, exceptions):
+	def _isAllPlayersVoted(self, electionVote, exceptions, ignoreOnlyWacthing=False):
+		group = (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED)
+		if ignoreOnlyWacthing:
+			(PlayerStatus.WATCHING,)
+
 		for player in self.getCurrentRoom().players:
-			if (player.status not in (PlayerStatus.WATCHING, PlayerStatus.ELIMINATED) and
+			if (player.status not in group and
 					player.socket.ip not in exceptions and 
 					player.socket.ip not in electionVote):
 				return False
@@ -606,13 +703,8 @@ class GameClient(Thread):
 			room = self.getRoom(params[ActionParam.ROOM_ID])
 			playerSocket = room.getPlayer(socket)
 			word = Word(params[ActionParam.WORD_STRING], params[ActionParam.WORD_DIVISION])
-			
-			if self.getCurrentPlayer() is self.getRoundMaster():
-				self._sharedGameData.roundWord = self._sharedGameData.wantedRoundWord
-				self._sharedGameData.wantedRoundWord = None
-				
-			else:
-				self._sharedGameData.roundWord = word
+
+			self._sharedGameData.roundWord = word
 			
 			self._sharedGameData.chosenWords.append({'player': playerSocket, 'word': word})
 
@@ -627,7 +719,8 @@ class GameClient(Thread):
 			)
 
 	def _watingAnswersTimeIsUpCallback(self):
-		self._roomPrint('Acabou o tempo para responder a Divisão Silábica.')
+		if self.getPhaseTime() == 0:
+			self._roomPrint('Acabou o tempo para responder a Divisão Silábica.')
 
 		self._sharedGameData.setGamePhase(GamePhase.WAITING_CORRECT_ANSWER)
 
@@ -637,7 +730,7 @@ class GameClient(Thread):
 	def _sendCorrectAnswer(self):
 		params = {
 			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
-			ActionParam.WORD_DIVISION: self.getRoundWord().getNoHashSyllables()
+			ActionParam.WORD_DIVISION: self._sharedGameData.wantedRoundMasterWord.getNoHashSyllables()
 		}
 
 		self._raiseActionIfNotCondictions(Action.SEND_MASTER_ANSWER, params)
@@ -649,32 +742,39 @@ class GameClient(Thread):
 		if actionError == ActionError.NONE:
 			wordDivision = params[ActionParam.WORD_DIVISION]
 			wordStr = self._sharedGameData.roundWord.wordStr
-			self._sharedGameData.roundWord = Word(wordStr, wordDivision)
+			self._sharedGameData.wantedRoundMasterWord = Word(wordStr, wordDivision)
 
 			self._roomPrint(f'A resposta correta era {wordDivision}')
 
 			room = self.getCurrentRoom()
 			roomPlayers = room.players
 			for player in roomPlayers:
-				if player is not self._sharedGameData.roundMaster:
+				if (player is not self._sharedGameData.roundMaster and 
+						not self.isEliminatedOrWatchingPlayer(player)):
 					if player.socket.ip not in self._sharedGameData.roundAnswers:
 						player.status = PlayerStatus.ELIMINATED
+						self._sharedGameData.roundPlayersEliminated.append(player)
 						self._roomPrint(f'\'{player.nickname}\' foi eliminado por não responder a divisão silábica.')
 					else:
 						word = self._sharedGameData.roundAnswers[player.socket.ip]
 						if word != self._sharedGameData.roundWord:
 							player.status = PlayerStatus.ELIMINATED
+							self._sharedGameData.roundPlayersEliminated.append(player)
 							self._roomPrint(f'\'{player.nickname}\' errou a divisão silábica e foi eliminado.')
 						else:
 							self._roomPrint(f'\'{player.nickname}\' respondeu corretamente divisão silábica.')
 
 			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
-			self._sharedGameData.setGamePhase(GamePhase.WAITING_CONTESTS)
+			if len(self._sharedGameData.roundPlayersEliminated) == 0:
+				self._roomPrint('Nenhum jogador errou a divisão silábica.')
+				self._goToResultPhase()
+			else:
+				self._sharedGameData.setGamePhase(GamePhase.WAITING_CONTESTS)
 
-			self._setCountdown(
-				GamePhase.WAITING_CONTESTS, CONFIG.TIME_PHASE, 
-				self._watingContestTimeIsUpCallback
-			)
+				self._setCountdown(
+					GamePhase.WAITING_CONTESTS, CONFIG.TIME_PHASE, 
+					self._watingContestTimeIsUpCallback
+				)
 
 	def _answerRoundWordCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -692,44 +792,136 @@ class GameClient(Thread):
 			)
 
 			if isAllPlayersVoted:
-					self._finishCountdown(GamePhase.WAITING_ANSWERS)
+				self._finishCountdown(GamePhase.WAITING_ANSWERS)
 
 
 	def _contestAnswerWordCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
+			self._cancelCountdown(GamePhase.WAITING_CONTESTS)
+
 			room = self.getRoom(params[ActionParam.ROOM_ID])
+			wordDivision = params[ActionParam.WORD_DIVISION]
+			wordStr = self._sharedGameData.roundAnswers[socket.ip].wordStr
+			self._sharedGameData.roundAnswers[socket.ip] = Word(wordStr, wordDivision)
+
 			playerSocket = room.getPlayer(socket)
 
 			self._sharedGameData.contestingPlayer = playerSocket
 
-			self._roomPrint(f'\'{playerSocket.nickname}\' contestou a resposta correta.')
+			self._roomPrint(f'\'{playerSocket.nickname}\' contestou a resposta correta. '
+							f'Sua resposta foi {wordDivision}')
 
 			self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 			self._sharedGameData.setGamePhase(GamePhase.ELECTING_CORRECT_ANSWER)
 
+			self._setCountdown(
+				GamePhase.ELECTING_CORRECT_ANSWER, CONFIG.TIME_PHASE, 
+				self._electingCorrectAnswerPhaseTimeIsUpCallback
+			)
+
+	def _chooseVoteContestAnswerCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerSocket = room.getPlayer(socket)
+
+			chosenPlayer = room.getPlayer(self.getSocket(params[ActionParam.SOCKET_IP]))
+			
+			if not chosenPlayer:
+				self._roomPrint(f'Eleição da Contestação - \'{playerSocket.nickname}\' votou nulo.')
+			else:
+				self._sharedGameData.contestingVotes[socket.ip] = chosenPlayer
+				word = self._wordOfContestingByPlayer(chosenPlayer)
+				self._roomPrint(f'Eleição da Contestação - \'{playerSocket.nickname}\' votou para '
+								f'{word.getNoHashSyllables()}')
+
+			if not self.isEliminatedOrWatchingPlayer(playerSocket):
+				playerSocket.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+
+			isAllPlayersVoted = self._isAllPlayersVoted(
+				self._sharedGameData.contestingVotes, 
+				{self.getRoundMaster().socket.ip, self.getContestingPlayer().socket.ip}, True
+			)
+
+			if isAllPlayersVoted:
+				self._finishCountdown(GamePhase.ELECTING_CORRECT_ANSWER)
+
+	def _electingCorrectAnswerPhaseTimeIsUpCallback(self):
+		if self.getPhaseTime() == 0:
+			self._roomPrint('Acabou o tempo para votar na Resposta Correta')
+
+		totalVotes, moreVotesPlayers = self._getMoreVotesPlayers(self._sharedGameData.contestingVotes)
+
+		if len(moreVotesPlayers) > 1:
+			self._roomPrint(f'Eleição da Contestação - Houveram empates. Portanto ninguém será elimando nesta rodada.')
+
+			for player in self._sharedGameData.roundPlayersEliminated:
+				player.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+
+		else:
+			word = self._wordOfContestingByPlayer(moreVotesPlayers[0])
+
+			if moreVotesPlayers[0] is self.getRoundMaster():
+				self._roomPrint(f'Eleição da Contestação - A divisão silábica que venceu foi {word.getNoHashSyllables()}. '
+								f'Portanto o jogadores que erraram continuam eliminados.')
+
+			elif moreVotesPlayers[0] is self.getContestingPlayer():
+				self._roomPrint(f'Eleição da Contestação - A divisão silábica que venceu foi {word.getNoHashSyllables()}. '
+								f'Portanto somente o Organizador da Rodada será eliminado nesta rodada.')
+
+				for player in self._sharedGameData.roundPlayersEliminated:
+					player.status = PlayerStatus.AWAITING_THE_END_OF_THE_VOTING_OF_THE_CONTEST
+
+				self.getRoundMaster().status = PlayerStatus.ELIMINATED
+
+		self._goToResultPhase()
+
 	def _watingContestTimeIsUpCallback(self):
-		if self.getGamePhase() == GamePhase.WAITING_CONTESTS:
-			self._goToResultPhase()
+		self._goToResultPhase()
 
 	def _goToResultPhase(self):
 		self._sharedGameData.phaseTime = CONFIG.TIME_PHASE
 		self._sharedGameData.setGamePhase(GamePhase.RESULT_ROUND)
 
-		if self._hasNotEliminatedPlayers():
-			Countdown(
-				CONFIG.TIME_PHASE, self._nextRound, daemon=True
-			).start()
+		if not self._hasOnlyOnePlayerAlive():
+			self._setCountdown(
+				GamePhase.RESULT_ROUND, CONFIG.TIME_PHASE, 
+				self._nextRound
+			)
 		else:
+			self._cancelAllCoutdown()
 			self._sharedGameData.setGamePhase(GamePhase.FINISHED)
+			winnerPlayer = self._getAlivePlayer()
+			if winnerPlayer:
+				winnerPlayer.status = PlayerStatus.WINNER
+				self._roomPrint(f'O jogador {winnerPlayer.nickname} venceu a partida.')
+			else:
+				self._roomPrint(f'Não houveram vencedores na partida.')
 
-	def _hasNotEliminatedPlayers(self):
+	def _wordOfContestingByPlayer(self, player):
+		if player is self.getRoundMaster():
+			return self._sharedGameData.wantedRoundMasterWord
+		elif player is self.getContestingPlayer():
+			contestingPlayerSocketIp = self.getContestingPlayer().socket.ip
+			return self._sharedGameData.roundAnswers[contestingPlayerSocketIp]
+		return None
+
+	def _hasOnlyOnePlayerAlive(self):
 		room = self.getCurrentRoom()
 		roomPlayers = room.players
 
+		alivePlayers = 0
 		for player in roomPlayers:
 			if player.status not in (PlayerStatus.ELIMINATED, PlayerStatus.WATCHING):
-				return True
-		return False
+				alivePlayers += 1
+		return alivePlayers <= 1
+
+	def _getAlivePlayer(self):
+		room = self.getCurrentRoom()
+		roomPlayers = room.players
+		for player in roomPlayers:
+			if not self.isEliminatedOrWatchingPlayer(player):
+				return player
+		return None
 
 	def _getMoreVotesPlayers(self, electionVotes):
 		votesByPlayer = {player.socket.ip: [player, 0] for player in self.getCurrentRoom().players}
@@ -758,6 +950,11 @@ class GameClient(Thread):
 			self._sharedGameData._countdowns[id_].cancel()
 			del self._sharedGameData._countdowns[id_]
 
+	def _cancelAllCoutdown(self):
+		for id_ in self._sharedGameData._countdowns:
+			self._sharedGameData._countdowns[id_].cancel()
+		self._sharedGameData._countdowns[id_] = {}
+
 	def _finishCountdown(self, id_):
 		if id_ in self._sharedGameData._countdowns:
 			self._sharedGameData._countdowns[id_].finish()
@@ -779,6 +976,22 @@ class GameClient(Thread):
 			room.removePlayer(socket)
 
 			print(f'O jogador \'{player.nickname}\' saiu da sala \'{room.name}\'.')
+
+			if room is self.getCurrentRoom():
+				# Remover jogador de possíves votações que pode ter realizado
+				participations = (
+					self._sharedGameData.roundMasterVotes,
+					self._sharedGameData.electingOut, 
+					self._sharedGameData.contestingVotes,
+					self._sharedGameData.roundAnswers
+				)
+
+				for participation in participations:
+					if socket.ip in participation:
+						del participation[socket.ip]
+
+				if player in self._sharedGameData.roundPlayersEliminated:
+					self._sharedGameData.roundPlayersEliminated.remove(player)
 
 			if socket is self.socket:
 				self._initSharedGameData()

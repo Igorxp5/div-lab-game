@@ -1,11 +1,14 @@
 import socket as sock
 
+import network.config as CONFIG
+
 from .game._socket import Socket
 from .action import ActionGroup, InvalidActionParams
 from .discovery_service import DiscoveryService
 from .packet import Packet, PacketRequest, PacketResponse, PacketType, InvalidPacketError
 
 from threading import Thread, Event, Lock, current_thread
+from datetime import datetime
 
 class Network(Thread):
 	MAX_LISTEN = 30
@@ -116,7 +119,8 @@ class Network(Thread):
 					len(self._connections) > 0) and self._blockUntilConnectToNetwork.is_set():
 				self._blockUntilConnectToNetwork.set()
 
-		self._connectingPeerThreads.remove(current_thread())
+		if current_thread() in self._connectingPeerThreads:
+			self._connectingPeerThreads.remove(current_thread())
 
 	def _bindTcpServer(self):
 		self._tcpServer.bind(self._tcpAddress)
@@ -160,8 +164,12 @@ class Network(Thread):
 
 		except InvalidPacketError:
 			print(f'Invalid Packet arrived from {socket} was ignored.')
+			if CONFIG.SAVE_LOG_INVALID_PACKETS:
+				self._saveLogPacket(socket, packet)
 		except InvalidActionParams:
 			print(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
+			if CONFIG.SAVE_LOG_INVALID_PACKETS:
+				self._saveLogPacket(socket, packet)
 
 	def _disconnectFromSocket(self, socket):
 		socket.connection.close()
@@ -176,6 +184,12 @@ class Network(Thread):
 			self._handleRecvData(socket, packet.toBytes())
 		else:
 			socket.connection.send(packet.toBytes())
+
+	def _saveLogPacket(self, socket, packet):
+		with open(CONFIG.LOG_INVALID_PACKETS_FILENAME, 'a') as file:
+			file.write(f'From socket {socket} to {self.socket} at ({datetime.now()})\n')
+			file.write(str(packet))
+
 
 if __name__ == '__main__':
 	discoveryAddress = '25.8.61.75', 8400

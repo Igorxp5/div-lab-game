@@ -61,6 +61,8 @@ class Room(JsonSerializable):
         self.players        = players
         self.status         = status
 
+        self.bannedSockets  = {}
+
     def __repr__(self):
         return repr(self.toJsonDict())
 
@@ -106,6 +108,9 @@ class Room(JsonSerializable):
                 return player
         return None
 
+    def getBannedSockets(self):
+        return self.bannedSockets
+
     def isPlayerInRoom(self, socket):
         return self.getPlayer(socket) is not None
 
@@ -123,6 +128,9 @@ class Room(JsonSerializable):
     def removePlayer(self, socket):
         player = [p for p in self.players if p.socket is socket][0]
         self.players.remove(player)
+
+    def banSocket(self, socket):
+        self.bannedSockets[socket.ip] = socket
 
     def _dictKeyProperty(self):
         return {

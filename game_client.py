@@ -268,6 +268,17 @@ class GameClient(Thread):
 		packet = PacketRequest(Action.JOIN_ROOM_PLAY, params)
 		self._sendPacketRequest(packet)
 
+	def joinRoomToWatch(self, roomId, playerName):
+		params = {
+			ActionParam.ROOM_ID: roomId,
+			ActionParam.PLAYER_NAME: playerName
+		}
+
+		self._raiseActionIfNotCondictions(Action.JOIN_ROOM_WATCH, params)
+
+		packet = PacketRequest(Action.JOIN_ROOM_WATCH, params)
+		self._sendPacketRequest(packet)
+
 	def quitRoom(self):
 		params = {
 			ActionParam.ROOM_ID: getattr(self.getCurrentRoom(), 'id', None),
@@ -463,6 +474,7 @@ class GameClient(Thread):
 			Action.GET_LIST_ROOMS: self._getListRoomsCallback,
 			Action.CREATE_ROOM: self._createRoomCallback,
 			Action.JOIN_ROOM_PLAY: self._joinRoomToPlayCallback,
+			Action.JOIN_ROOM_WATCH: self._joinRoomToWatchCallback,
 			Action.KICK_PLAYER_ROOM: self._kickPlayerFromRoomCallback,
 			Action.QUIT_ROOM: self._quitRoomCallback,
 			Action.START_ROOM_GAME: self._startGameCallback,
@@ -546,6 +558,16 @@ class GameClient(Thread):
 
 			if len(room.players) == room.limitPlayers and room.owner is self.socket:
 				self.startGame()
+
+	def _joinRoomToWatchCallback(self, socket, params, actionError):
+		if actionError == ActionError.NONE:
+			room = self.getRoom(params[ActionParam.ROOM_ID])
+			playerName = params[ActionParam.PLAYER_NAME]
+			# player = Player(playerName, socket, PlayerStatus.WATCHING)
+			# room.players.append(player)
+			# self._sharedGameData.room = room
+			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\' para assistir a partida.')
+
 
 	def _kickPlayerFromRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:

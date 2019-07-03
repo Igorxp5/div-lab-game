@@ -78,7 +78,7 @@ class ActionError(Enum):
 	PLAYER_NOT_MISSED_ANSWER = (15, 'O jogador não errou a palavra.')
 	PLAYER_CANT_BE_OWNER = (16, 'O jogador não é elegível a dono da sala.')
 	PLAYER_IS_A_OWNER = (17, 'O jogador já é dono de uma sala.')
-	MIN_PLAYERS_TO_START = (18, f'A quantidade mínima de jogadores para iniciar uma sala é {CONFIG.MIN_PLAYERS_TO_START}.')
+	MIN_PLAYERS_TO_START = (18, f'A quantidade mínima de jogadores para iniciar uma partida é {CONFIG.MIN_PLAYERS_TO_START}.')
 	GAME_NOT_IN_ELECTING_ROUND_MASTER = (19, 'O jogo não se encontra na fase de eleição de organizador da rodada.')
 	PLAYER_IS_OUT_ELECTING = (20, 'O jogador não pode ser escolhido, ele está fora da eleição.')
 	ROOM_IN_GAME = (21, 'A sala já está em jogo.')

@@ -1,7 +1,8 @@
 def gameController(game):
 	# game.createRoom('Sala de Teste', 3, 'Eu')
 	# print(game.getAvailableRooms())
-	# game.joinRoomToPlay(list(game.getAvailableRooms().keys())[0], 'Igorxp5')
+	# game.joinRoomToPlay(list(game.getAvailableRooms().keys())[0], 'Eu')
+	# game.joinRoomToWatch(list(game.getAvailableRooms().keys())[0], 'Outro')
 	# game.kickPlayerFromRoom(game.getCurrentRoom().getPlayers()[1])
 	# game.quitRoom()
 	# game.startGame()

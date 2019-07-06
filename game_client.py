@@ -391,6 +391,12 @@ class GameClient(Thread):
 	def getAvailableRooms(self):
 		return self._rooms
 
+	def getRoomByName(self, name):
+		room = [id_ for id_, room in self.getAvailableRooms().items() if room.name == name]
+		if room:
+			return room[0]
+		return None
+
 	def getRoom(self, roomId):
 		return self._rooms.get(roomId, None)
 

@@ -5,6 +5,10 @@ import logging
 
 from threading import Thread, Lock
 
+
+LOG_MODULE = logging.getLogger(__name__)
+
+
 class DiscoveryService(Thread):
 	ENCODING = 'ascii'
 	HEADER_FIRST_LINE = b'DIVLABGAME-DISCOVERY\r\n'
@@ -25,7 +29,7 @@ class DiscoveryService(Thread):
 	def run(self):
 		self._bindSocket()
 		
-		logging.info(f'Serviço de Descoberta incializado em {self._discoveryAddress}...')
+		LOG_MODULE.info(f'Serviço de Descoberta incializado em {self._discoveryAddress}...')
 		
 		self._waitServerStartLock.release()
 		

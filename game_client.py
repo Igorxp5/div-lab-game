@@ -224,14 +224,19 @@ class GameClient(Thread):
 		self._network.blockUntilConnectToNetwork()
 
 		if len(self._network.peers) > 0:
-			self._waitDownloadListRooms.set()
 			self.downloadListRooms()
-			self._waitDownloadListRooms.wait()
+		else:
+			self._waitDownloadListRooms.set()
+		
+		self._waitDownloadListRooms.wait()
 
 		self._shutdownFlag.wait()
 
 	def shutdown(self):
 		self._shutdownFlag.set()
+
+	def blockUntilNetworkReady(self):
+		self._waitDownloadListRooms.wait()
 
 	def downloadListRooms(self):
 		packet = PacketRequest(Action.GET_LIST_ROOMS)
@@ -529,6 +534,7 @@ class GameClient(Thread):
 			for id_, room in content.items():
 				roomJsonData = json.dumps(room)
 				self._rooms[id_] = Room.parseJson(roomJsonData, self._network.allNetwork)
+		self._waitDownloadListRooms.set()
 
 	def _raiseActionIfNotCondictions(self, action, params):
 		for condition in action.conditions:

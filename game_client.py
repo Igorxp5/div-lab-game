@@ -1,7 +1,6 @@
 import json
 import time
 import logging
-import traceback # TODO: Remover no final do projeto
 
 import network.config as CONFIG
 
@@ -20,8 +19,6 @@ from network.game.word import Word
 from threading import Thread, Event, Lock
 from datetime import datetime
 from importlib import reload
-
-import _game_controller_test
 
 class GameActionError(RuntimeError):
 	def __init__(self, actionError):
@@ -165,8 +162,8 @@ class GameClient(Thread):
 	TCP_SERVER_PORT = CONFIG.TCP_SERVER_PORT
 	PACKET_WAITING_APPROVATION_QUEUE_SIZE = 30
 
-	def __init__(self, address):
-		super().__init__(daemon=True)
+	def __init__(self, address, daemon=False):
+		super().__init__(daemon=daemon)
 		self._discoveryAddress = address, GameClient.DISCOVERY_PORT
 		self._tcpAddress = address, GameClient.TCP_SERVER_PORT
 
@@ -189,6 +186,7 @@ class GameClient(Thread):
 
 		self._waitDownloadListRooms = Event()
 		self._removePlayerFromRoomLock = Lock()
+		self._shutdownFlag = Event()
 
 	@property
 	def _receiverGroupIps(self):
@@ -218,14 +216,10 @@ class GameClient(Thread):
 			self.downloadListRooms()
 			self._waitDownloadListRooms.wait()
 
-		while True:
-			logging.debug('Tecle Enter para recarregar o Game Controller...')
-			input()
-			try:
-				reload(_game_controller_test)
-				_game_controller_test.gameController(self)
-			except Exception as exception:
-				traceback.print_exc()
+		self._shutdownFlag.wait()
+
+	def shutdown(self):
+		self._shutdownFlag.set()
 
 	def downloadListRooms(self):
 		packet = PacketRequest(Action.GET_LIST_ROOMS)

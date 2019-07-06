@@ -10,6 +10,8 @@ CONSOLE_WIDTH = console_size.columns
 CONSOLE_HEIGHT = console_size.lines
 CONSOLE_COLOR = 192, 192, 192
 
+currentPosition = 0, 0
+
 def init(*args, **kwargs):
     colorama.init(*args, **kwargs)
 
@@ -27,8 +29,14 @@ def stringColor(rgb, string):
     return setColor(rgb) + string + resetColor()
 
 
+def cursorPosition():
+    global currentPosition
+    return currentPosition
+
 def moveCursor(x, y):
+    global currentPosition
     print("\033[%d;%dH" % (y, x), end="")
+    currentPosition = x, y
 
 def setConsoleFont(facename="Lucida Console", size=8,
                      dwFontsizeX=7, dwFontsizeY=14, fontfamily=54, fontWeight=400):

@@ -1,4 +1,4 @@
-import console as Console
+from . import console as Console
 
 class ConsoleRectangle:
 	def __init__(self, position, width, height, borderColor=Console.CONSOLE_COLOR):
@@ -9,6 +9,8 @@ class ConsoleRectangle:
 		self.borderColor = borderColor
 
 	def draw(self):
+		Console.init()
+		
 		line = '┌'
 		space = ''
 		temp = ''

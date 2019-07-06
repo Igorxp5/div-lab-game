@@ -1,8 +1,8 @@
 import time
 import msvcrt
-import console as Console
+from . import console as Console
 
-from console_rectangle import ConsoleRectangle
+from .console_rectangle import ConsoleRectangle
 
 class ConsoleInput:
     def __init__(self, position, width=15, height=1, maxLength=None):
@@ -27,10 +27,13 @@ class ConsoleInput:
         self._inputRectangle.draw()
 
     def start(self):
-        self._moveToStartPosition()
+        self.moveToStartPosition()
         self._capture()
 
-    def _moveToStartPosition(self):
+    def currentPosition(self):
+        return self.x + 2 + len(self._visibleText), self.y + 1 
+
+    def moveToStartPosition(self):
         Console.moveCursor(self.x + 2, self.y + 1)
 
     def _capture(self):
@@ -55,7 +58,7 @@ class ConsoleInput:
                 continue
 
 
-            self._moveToStartPosition()
+            self.moveToStartPosition()
 
             for _ in range(self.maxLengthVisible):
                 print(' ', end='')
@@ -69,7 +72,7 @@ class ConsoleInput:
             else:
                 self._visibleText = self._currentText
 
-            self._moveToStartPosition()
+            self.moveToStartPosition()
 
             print(self._visibleText, end='')
 
@@ -83,7 +86,8 @@ class ConsoleInput:
         return self._currentText
 
     def clearText(self):
-        self._moveToStartPosition()
+        currentPosition = Console.cursorPosition()
+        self.moveToStartPosition()
 
         for _ in range(self.maxLengthVisible):
             print(' ', end='')
@@ -91,6 +95,8 @@ class ConsoleInput:
         self._currentText = ''
         self._visibleText = ''
         self._lastText = ''
+
+        Console.moveCursor(*currentPosition)
 
 
 if __name__ == '__main__':

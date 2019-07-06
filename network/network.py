@@ -1,14 +1,15 @@
+import logging
 import socket as sock
 
 import network.config as CONFIG
 
 from .game._socket import Socket
-from .action import ActionGroup, InvalidActionParams
 from .discovery_service import DiscoveryService
+from .action import ActionGroup, InvalidActionParams
 from .packet import Packet, PacketRequest, PacketResponse, PacketType, InvalidPacketError
 
-from threading import Thread, Event, Lock, current_thread
 from datetime import datetime
+from threading import Thread, Event, Lock, current_thread
 
 class Network(Thread):
 	MAX_LISTEN = 30
@@ -90,7 +91,9 @@ class Network(Thread):
 
 	def _discoveryAndConnectPeers(self):
 		addresses = self._discoveryService.discover(Network.DISCOVERY_TIMEOUT)
-		print(f'Descoberto {len(addresses)} endereços IP. Tentando contactá-los...')
+
+		logging.info(f'Descoberto {len(addresses)} endereços IP. Tentando contactá-los...')
+
 		self._connectingPeerThreads = [None] * len(addresses)
 		for address in addresses:
 			thread = Thread(target=self._connectToPeer, args=(address,), daemon=True)
@@ -113,7 +116,7 @@ class Network(Thread):
 			thread.start()
 
 		except (TimeoutError, ConnectionRefusedError):
-			print(f'Não foi possível conectar-se a {address}')
+			logging.warning(f'Não foi possível conectar-se a {address}!')
 
 			if (any([not t.is_alive() for t in self._connectingPeerThreads if t]) and
 					len(self._connections) > 0) and self._blockUntilConnectToNetwork.is_set():
@@ -136,7 +139,7 @@ class Network(Thread):
 			thread.start()
 
 	def _listenConnection(self, socket):
-		print('Conectado a', socket.ip, socket.port)
+		logging.info(f'Conectado a {socket}.')
 
 		if not self._blockUntilConnectToNetwork.is_set():
 			self._blockUntilConnectToNetwork.set()
@@ -163,11 +166,11 @@ class Network(Thread):
 				self._listenPacketCallback(socket, packet)
 
 		except InvalidPacketError:
-			print(f'Invalid Packet arrived from {socket} was ignored.')
+			logging.error(f'Invalid Packet arrived from {socket} was ignored.')
 			if CONFIG.SAVE_LOG_INVALID_PACKETS:
 				self._saveLogPacket(socket, packet)
 		except InvalidActionParams:
-			print(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
+			logging.error(f'A Packet arrived with wrong ActionParams from {socket} was ignored.')
 			if CONFIG.SAVE_LOG_INVALID_PACKETS:
 				self._saveLogPacket(socket, packet)
 
@@ -175,7 +178,9 @@ class Network(Thread):
 		socket.connection.close()
 		del self._connections[socket.ip]
 		del self._listenThreads[socket.ip]
-		print(f'Desconectado de {socket}')
+
+		logging.info(f'Desconectado de {socket}.')
+
 		if self._disconnectSocketCallback:
 			self._disconnectSocketCallback(socket)
 

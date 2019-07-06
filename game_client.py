@@ -1,5 +1,6 @@
 import json
 import time
+import logging
 import traceback # TODO: Remover no final do projeto
 
 import network.config as CONFIG
@@ -218,7 +219,8 @@ class GameClient(Thread):
 			self._waitDownloadListRooms.wait()
 
 		while True:
-			input('Tecle Enter para recarregar o Game Controller...\n')
+			logging.debug('Tecle Enter para recarregar o Game Controller...')
+			input()
 			try:
 				reload(_game_controller_test)
 				_game_controller_test.gameController(self)
@@ -505,7 +507,7 @@ class GameClient(Thread):
 				callback(socket, packet.params, actionError)
 
 		if actionError != ActionError.NONE:
-			print(f'From {socket}: Erro #{actionError.code} - {actionError}')
+			logging.error(f'From {socket}: Erro #{actionError.code} - {actionError}')
 
 	def _actionReadPacketCallback(self, socket, packet):
 		if packet.action == Action.GET_LIST_ROOMS and isinstance(packet, PacketRequest):
@@ -542,7 +544,8 @@ class GameClient(Thread):
 			)
 			room.joinPlayer(socket, playerName)
 			self._rooms[roomId] = room
-			print(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers}). ({repr(roomId)})')
+
+			logging.info(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers}). ({repr(roomId)})')
 
 			if socket is self.socket:
 				self._sharedGameData.room = room
@@ -554,7 +557,8 @@ class GameClient(Thread):
 			player = Player(playerName, socket, PlayerStatus.ON_HOLD)
 			room.players.append(player)
 			self._sharedGameData.room = room
-			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\'.')
+
+			logging.info(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\'.')
 
 			if len(room.players) == room.limitPlayers and room.owner is self.socket:
 				self.startGame()
@@ -566,8 +570,7 @@ class GameClient(Thread):
 			# player = Player(playerName, socket, PlayerStatus.WATCHING)
 			# room.players.append(player)
 			# self._sharedGameData.room = room
-			print(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\' para assistir a partida.')
-
+			logging.info(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\' para assistir a partida.')
 
 	def _kickPlayerFromRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -588,7 +591,7 @@ class GameClient(Thread):
 			room = self.getRoom(params[ActionParam.ROOM_ID])
 			room.status = RoomStatus.IN_GAME
 			if room.isPlayerInRoom(self.socket):
-				print(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
+				logging.info(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
 
 				self._nextRound()
 
@@ -961,7 +964,7 @@ class GameClient(Thread):
 			del self._sharedGameData._countdowns[id_]
 
 	def _roomPrint(self, message):
-		print(f'Sala \'{self.getCurrentRoom().name}\': {message}')
+		logging.info(f'Sala \'{self.getCurrentRoom().name}\': {message}')
 
 	def _disconnectCallback(self, socket):
 		self._removeSocketFromRooms(socket)
@@ -975,7 +978,7 @@ class GameClient(Thread):
 		if player:
 			room.removePlayer(socket)
 
-			print(f'O jogador \'{player.nickname}\' saiu da sala \'{room.name}\'.')
+			logging.info(f'O jogador \'{player.nickname}\' saiu da sala \'{room.name}\'.')
 
 			if room is self.getCurrentRoom():
 				# Remover jogador de possíves votações que pode ter realizado
@@ -1109,7 +1112,7 @@ class GameClient(Thread):
 			valid = False
 		
 		if not valid:
-			print(f'Game Packet invalid arrived from {socket} was ignored.')
+			logging.info(f'Game Packet invalid arrived from {socket} was ignored.')
 		
 		return valid	
 

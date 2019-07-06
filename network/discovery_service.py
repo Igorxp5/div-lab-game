@@ -1,6 +1,8 @@
 import sys
 import time
 import socket
+import logging
+
 from threading import Thread, Lock
 
 class DiscoveryService(Thread):
@@ -22,7 +24,8 @@ class DiscoveryService(Thread):
 
 	def run(self):
 		self._bindSocket()
-		print(f'Serviço de Descoberta em {self._discoveryAddress}...')
+		
+		logging.info(f'Serviço de Descoberta incializado em {self._discoveryAddress}...')
 		
 		self._waitServerStartLock.release()
 		

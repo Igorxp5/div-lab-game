@@ -557,7 +557,10 @@ class GameClient(Thread):
 			room.joinPlayer(socket, playerName)
 			self._rooms[roomId] = room
 
-			self._generalPrint(f'O {socket} \'{playerName}\' criou a sala {repr(name)}({limitPlayers}). ({repr(roomId)})')
+			self._generalPrint(
+				f'\'{playerName}\' criou a sala {repr(name)} com o limite de {limitPlayers} jogadores.',
+				socket
+			)
 
 			if socket is self.socket:
 				self._sharedGameData.room = room
@@ -570,7 +573,10 @@ class GameClient(Thread):
 			room.players.append(player)
 			self._sharedGameData.room = room
 
-			self._generalPrint(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\'.')
+			self._generalPrint(
+				f'\'{playerName}\' entrou na sala \'{room.name}\'.',
+				socket
+			)
 
 			if len(room.players) == room.limitPlayers and room.owner is self.socket:
 				self.startGame()
@@ -582,7 +588,10 @@ class GameClient(Thread):
 			# player = Player(playerName, socket, PlayerStatus.WATCHING)
 			# room.players.append(player)
 			# self._sharedGameData.room = room
-			self._generalPrint(f'O {socket} entrou na sala \'{room.name}\' como \'{playerName}\' para assistir a partida.')
+			self._generalPrint(
+				f'\'{playerName}\' entrou na sala \'{room.name}\' para assistir a partida.',
+				socket
+			)
 
 	def _kickPlayerFromRoomCallback(self, socket, params, actionError):
 		if actionError == ActionError.NONE:
@@ -602,9 +611,12 @@ class GameClient(Thread):
 		if actionError == ActionError.NONE:
 			room = self.getRoom(params[ActionParam.ROOM_ID])
 			room.status = RoomStatus.IN_GAME
-			if room.isPlayerInRoom(self.socket):
-				self._generalPrint(f'O {socket} iniciou o jogo da sala \'{room.name}\'')
+			self._generalPrint(
+				f'\'{room.owner.nickname}\' iniciou o jogo da sala \'{room.name}\'',
+				socket
+			)
 
+			if room.isPlayerInRoom(self.socket):
 				self._nextRound()
 
 	def _nextRound(self):
@@ -976,10 +988,10 @@ class GameClient(Thread):
 			del self._sharedGameData._countdowns[id_]
 
 	def _roomPrint(self, message):
-		LOG_MODULE.info(message, GameClientLog.GENERAL, self.getCurrentRoom().getName())
+		LOG_MODULE.info(message, GameClientLog.ROOM, self.getCurrentRoom().getName())
 
-	def _generalPrint(self, message):
-		LOG_MODULE.info(message, GameClientLog.GENERAL)
+	def _generalPrint(self, socket, message):
+		LOG_MODULE.info(message, GameClientLog.GENERAL, socket)
 
 	def _errorPrint(self, message):
 		LOG_MODULE.error(message, GameClientLog.GENERAL)
@@ -996,7 +1008,11 @@ class GameClient(Thread):
 		if player:
 			room.removePlayer(socket)
 
-			self._generalPrint(f'O jogador \'{player.nickname}\' saiu da sala \'{room.name}\'.')
+			self._generalPrint(
+				f'\'{player.nickname}\' saiu da sala \'{room.name}\'.',
+				socket
+
+			)
 
 			if room is self.getCurrentRoom():
 				# Remover jogador de possíves votações que pode ter realizado
@@ -1130,7 +1146,10 @@ class GameClient(Thread):
 			valid = False
 		
 		if not valid:
-			self._generalPrint(f'Game Packet invalid arrived from {socket} was ignored.')
+			self._generalPrint(
+				f'Game Packet invalid arrived from {socket} was ignored.',
+				socket
+			)
 		
 		return valid	
 

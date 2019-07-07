@@ -20,6 +20,9 @@ class ConsoleInput:
 
         self._updateIntervalTime = 0.005
 
+        self._cursorTextPosition = 0
+        self._keyArrowsCallback = None
+
     def draw(self):
         self._inputRectangle = ConsoleRectangle(
             self.inputPosition, self.inputWidth, self.inputHeight
@@ -30,8 +33,11 @@ class ConsoleInput:
         self.moveToStartPosition()
         self._capture()
 
+    def setKeyArrowsCallback(self, callback):
+        self._keyArrowsCallback = callback
+
     def currentPosition(self):
-        return self.x + 2 + len(self._visibleText), self.y + 1 
+        return self.x + 2 + self._cursorTextPosition, self.y + 1 
 
     def moveToStartPosition(self):
         Console.moveCursor(self.x + 2, self.y + 1)
@@ -42,14 +48,37 @@ class ConsoleInput:
                 key = msvcrt.getch()
 
                 if key == b'\x08':
-                    self._currentText = self._currentText[:-1] if len(self._currentText) - 1 >= 0 else self._currentText
+                    if len(self._currentText) - 1 >= 0:
+                        self._currentText = self._currentText[:self._cursorTextPosition - 1] + self._currentText[self._cursorTextPosition:]
+                        self._cursorTextPosition -= 1
                 elif len(self._currentText) == self.maxLength and self.maxLength != -1:
                     continue
                 elif key == b'\r':
                     return
+                elif key == b'\xe0':
+                    key = msvcrt.getch()
+
+                    if key[0] in (72, 77, 80, 75):
+                        if key[0] == 77: # Right
+                            self._cursorTextPosition = min(self._cursorTextPosition + 1, len(self._currentText))
+                        elif key[0] == 75: # Left
+                            self._cursorTextPosition = max(0, self._cursorTextPosition - 1)
+
+                        if self._keyArrowsCallback:
+                            self._keyArrowsCallback(key)
+                    elif key == b'G': # Home
+                        self._cursorTextPosition = 0
+                    elif key == b'O': # End
+                        self._cursorTextPosition = len(self._currentText)
+                    elif key == b'S': # Delete
+                        if len(self._currentText) - 1 >= 0:
+                            self._currentText = self._currentText[:self._cursorTextPosition] + self._currentText[self._cursorTextPosition + 1:]
+                    Console.moveCursor(*self.currentPosition())
                 elif key:
                     try:
-                        self._currentText += key.decode('utf-8')
+                        self._currentText = (self._currentText[:self._cursorTextPosition] 
+                                        + key.decode('utf-8') + self._currentText[self._cursorTextPosition:])
+                        self._cursorTextPosition += 1
                     except:
                         continue
 
@@ -76,7 +105,7 @@ class ConsoleInput:
 
             print(self._visibleText, end='')
 
-            Console.moveCursor(self.x + 2 + len(self._visibleText), self.y + 1)
+            Console.moveCursor(*self.currentPosition())
 
             self._lastText = self._currentText
 
@@ -95,6 +124,7 @@ class ConsoleInput:
         self._currentText = ''
         self._visibleText = ''
         self._lastText = ''
+        self._cursorTextPosition = 0
 
         Console.moveCursor(*currentPosition)
 

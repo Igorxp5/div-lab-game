@@ -13,6 +13,11 @@ class ConsoleChat:
 		self._width = Console.CONSOLE_WIDTH - 4
 		self._inputPosition = 2, Console.CONSOLE_HEIGHT - 4
 		self._input = ConsoleInput(self._inputPosition, Console.CONSOLE_WIDTH - 4)
+		self._linesOffset = 0
+		self._maxLengthLine = self._width - 4
+		self._marginX, self._marginY = 5, 2 
+
+		self._input.setKeyArrowsCallback(self._keyArrowsCallback)
 
 	def start(self):
 		ConsoleRectangle((2, 1), self._width, self._height).draw()
@@ -38,25 +43,54 @@ class ConsoleChat:
 		if breakLineAfter:
 			self._lines.append('')
 		
-		currentPosition = Console.cursorPosition()
-		Console.moveCursor(5, 2)
 		start = None
 		if len(self._lines) <= self._height:
 			start = 0
 		else:
 			start = len(self._lines) - self._height
 
-		lineNumber = 0
-		for i in range(start, len(self._lines)):
-			print(f'{self._lines[i]}')
-			lineNumber += 1
-			Console.moveCursor(5, 2 + lineNumber)
+		self._showLines(start)
 
-		Console.moveCursor(*currentPosition)
+		self._linesOffset = len(self._lines) - self._height
 
 	def moveCursorOut(self):
 		x, y = self._inputPosition[0], self._inputPosition[1] + 3
 		Console.moveCursor(x, y)
+
+	def clear(self):
+		currentPosition = Console.cursorPosition()
+		Console.moveCursor(self._marginX, self._marginY)
+
+		lineNumber = 0
+		for _ in range(self._height):
+			print(' ' * self._maxLengthLine)
+			lineNumber += 1
+			Console.moveCursor(self._marginX, self._marginY + lineNumber)
+
+		Console.moveCursor(*currentPosition)
+
+	def _showLines(self, offset):
+		self.clear()
+
+		currentPosition = Console.cursorPosition()
+		Console.moveCursor(self._marginX, self._marginY)
+
+		lineNumber = 0
+		end = min(offset + self._height, len(self._lines))
+		for i in range(offset, end):
+			print(f'{self._lines[i]}')
+			lineNumber += 1
+			Console.moveCursor(self._marginX, self._marginY + lineNumber)
+
+		Console.moveCursor(*currentPosition)
+
+	def _keyArrowsCallback(self, key):
+		if key[0] == 72: # Up
+			self._linesOffset = max(0, self._linesOffset - 1)
+			self._showLines(self._linesOffset)
+		elif key[0] == 80: # Down
+			self._linesOffset = min(self._linesOffset + 1, len(self._lines) - self._height)
+			self._showLines(self._linesOffset)
 
 
 if __name__ == '__main__':

@@ -116,19 +116,19 @@ consoleChatLogHandler = ChatLogHandler(consoleChat)
 consoleChatLogHandler.setFormatter(consoleChatLogFormatter)
 logging.basicConfig(level=logging.INFO, handlers=(consoleChatLogHandler,))
 
-interfaces = getAllIpAddress()
-consoleChat.putLine('[Cliente]: Escolha a interface que você deseja para iniciar o jogo:')
-for i, ip in enumerate(interfaces):
-    consoleChat.putLine(f'         {i} - {ip}')
-
-numberInterface = int(consoleChat.input())
-
-gameClient = GameClient(interfaces[numberInterface], daemon=True)
-gameClient.start()
-
-gameClient.blockUntilNetworkReady()
-
 try:
+    interfaces = getAllIpAddress()
+    consoleChat.putLine('[Cliente]: Escolha a interface que você deseja para iniciar o jogo:')
+    for i, ip in enumerate(interfaces):
+        consoleChat.putLine(f'         {i} - {ip}')
+
+    numberInterface = int(consoleChat.input())
+
+    gameClient = GameClient(interfaces[numberInterface], daemon=True)
+    gameClient.start()
+
+    gameClient.blockUntilNetworkReady()
+    
     while True:
         try:
             commandText = consoleChat.input()
